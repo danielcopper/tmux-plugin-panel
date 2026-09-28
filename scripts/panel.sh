@@ -138,7 +138,7 @@ cmd_add() {
 		printf "\nAdded: set -g @plugin '%s'\n" "$spec"
 		warn_if_not_sourced
 		printf '\n'
-		"$TPP_TPM_DIR/bin/install_plugins"
+		run_tpm "Installing $(tpp_display_name "$spec")" "$TPP_TPM_DIR/bin/install_plugins"
 		reload_tmux_config
 	fi
 	pause

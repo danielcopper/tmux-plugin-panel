@@ -188,3 +188,16 @@ EOF2
 	[[ $output == *"Cleaning ⠋"*$'\r\033[K''Removing "orphan"'*'"orphan" clean success'* ]]
 	[ ! -e "$PLUGIN_DIR/orphan" ]
 }
+
+@test "add runs TPM's install behind a spinner, then shows TPM's output" {
+	make_remote alpha
+	slow_tpm install_plugins
+	local panel url
+	panel=$(printf '%q' "$TPP_ROOT/scripts/panel.sh")
+	url=$(remote_url alpha)
+	# The plugin and enter answer the prompt, x is the key for "Press any key".
+	run bash -c 'printf "%s\rx" "$2" | SHELL=/bin/bash script -qec "$1 add" /dev/null' _ "$panel" "$url"
+	[ "$status" -eq 0 ]
+	[[ $output == *"Installing $url ⠋"*$'\r\033[K''Installing "alpha"'*'"alpha" download success'* ]]
+	[ -d "$PLUGIN_DIR/alpha/.git" ]
+}
