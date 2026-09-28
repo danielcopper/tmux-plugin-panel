@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # A fixed shellcheck release, checked against its published sha256, so
+      # CI and a local run of the same version report the same findings
+      # (apt's older shellcheck reports checks that 0.11 does not).
+      - name: Install shellcheck 0.11.0
+        env:
+          SHELLCHECK_VERSION: v0.11.0
+          SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+        run: |
+          archive="shellcheck-$SHELLCHECK_VERSION.linux.x86_64.tar.xz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/koalaman/shellcheck/releases/download/$SHELLCHECK_VERSION/$archive"
+          echo "$SHELLCHECK_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/shellcheck-$SHELLCHECK_VERSION" >>"$GITHUB_PATH"
+      - name: Show shellcheck version
+        run: shellcheck --version
+      - name: Check syntax
+        run: for f in tmux-plugin-panel.tmux scripts/*.sh; do bash -n "$f"; done
+      - name: Run shellcheck
+        run: shellcheck -x tmux-plugin-panel.tmux scripts/*.sh test/*.bash test/*.bats
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The tests copy TPM into their temporary plugin directories. The panel
+      # sources TPM's helpers and runs its scripts, so TPM is pinned: a change
+      # upstream then cannot alter what the suite exercises without a
+      # deliberate bump here.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: tmux-plugins/tpm
+          ref: e261deb1b47614eed3400089ce7197dc68acc4eb
+          path: .tpm
+      - name: Install tmux, fzf and bats
+        run: sudo apt-get update && sudo apt-get install -y tmux fzf bats
+      - name: Run tests
+        env:
+          TPM_SRC: ${{ github.workspace }}/.tpm
+        run: bats test/
