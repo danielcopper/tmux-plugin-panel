@@ -49,6 +49,8 @@ Press `prefix + P` to open the panel.
 
 When it opens, the panel fetches every installed plugin in parallel and shows
 `checking…` until the fetches are done; then the list shows the real status.
+While it fetches, on opening and after `r`, fzf's spinner turns in the line
+above the header.
 Each fetch is cut off after 10 seconds when `timeout` or `gtimeout` is
 available.
 

@@ -163,7 +163,7 @@ run_ui() {
 	tpp_collect_checking | tpp_format_rows |
 		fzf --multi --ansi --no-sort --layout=reverse --disabled \
 			--delimiter $'\t' --with-nth 2.. --header-lines 1 \
-			--prompt '' --info hidden --header "$(header)" \
+			--prompt '' --info default --no-separator --header "$(header)" \
 			--preview "$self preview {1}" --preview-window 'down,50%,wrap' \
 			--bind "load:reload-sync($self rows --fetch)+unbind(load)" \
 			--bind 'change:clear-query' \
