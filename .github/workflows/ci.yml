@@ -52,8 +52,17 @@ jobs:
           repository: tmux-plugins/tpm
           ref: e261deb1b47614eed3400089ce7197dc68acc4eb
           path: .tpm
-      - name: Install tmux, fzf and bats
-        run: sudo apt-get update && sudo apt-get install -y tmux fzf bats
+      - name: Install tmux, fzf, bats and locales
+        run: sudo apt-get update && sudo apt-get install -y tmux fzf bats locales
+      # The tests of the age column's language need these locales: they ask
+      # git for a German date under en_US.UTF-8 with LANGUAGE=de and under
+      # de_DE.UTF-8, which git honours only for an installed locale, and they
+      # skip when git answers in English. The German tests then also run
+      # under an installed de_DE.UTF-8, as a user would, with bash counting
+      # characters, not bytes. git's German messages come with the runner's
+      # git, installed from the git-core PPA.
+      - name: Generate the de_DE.UTF-8 and en_US.UTF-8 locales
+        run: sudo locale-gen de_DE.UTF-8 en_US.UTF-8
       - name: Run tests
         env:
           TPM_SRC: ${{ github.workspace }}/.tpm
