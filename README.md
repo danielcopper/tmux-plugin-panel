@@ -71,7 +71,10 @@ available.
 
 While TPM installs, updates or cleans, a spinner shows; `ctrl-c` stops TPM.
 After every change the panel reloads your tmux config and refreshes the list.
-The output of TPM is shown until you press a key.
+An update ends with one line per plugin: its old and new commit,
+`already up to date`, or `update failed`, and below them TPM's output when an
+update failed. The other actions show TPM's output. Either stays until you
+press a key.
 
 The preview under the list shows where a plugin is declared, its directory and
 repository, and for an installed plugin the commits an update would bring.

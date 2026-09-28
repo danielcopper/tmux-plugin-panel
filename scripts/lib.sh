@@ -593,6 +593,83 @@ tpp_remove() {
 	printf 'removed %s\n' "$name"
 }
 
+# tpp_head <dir>: the commit checked out in plugin directory <dir>; false
+# when <dir> is not a git checkout.
+tpp_head() {
+	tpp_is_git_checkout "$1" || return 1
+	tpp_git "$1" rev-parse -q --verify HEAD
+}
+
+# tpp_update_heads <all|name...>: prints "name<TAB>head<TAB>spec" for every
+# plugin that TPM's update_plugins with the same arguments acts on, sorted by
+# name: for "all" every declared plugin with a directory, otherwise the named
+# ones. head is the commit checked out, "-" when there is none (no directory,
+# or not a git checkout); spec is the declaration, empty when there is none.
+tpp_update_heads() {
+	local records names name spec head
+	records=$(tpp_collect_checking)
+	if [[ $1 == all ]]; then
+		names=$(awk -F '\t' '$4 != "" && $2 != "not installed" { print $1 }' <<<"$records")
+	else
+		names=$(for name; do tpp_plugin_name "${name%%#*}"; done | LC_ALL=C sort -u)
+	fi
+	while IFS= read -r name; do
+		[[ -n $name ]] || continue
+		spec=$(awk -F '\t' -v n="$name" '$1 == n { print $4; exit }' <<<"$records")
+		head=$(tpp_head "$TPP_PLUGIN_DIR$name") || head=-
+		printf '%s\t%s\t%s\n' "$name" "$head" "$spec"
+	done <<<"$names"
+}
+
+# tpp_update_summary <heads> <log> <status>: the result of TPM's update, one
+# line per plugin in the file <heads> (from tpp_update_heads, written before
+# the update): the plugin's name as the list shows it, then
+#   "<old> → <new>"       the short commits, when its HEAD moved;
+#   "already up to date"  when it did not;
+#   "update failed"       when TPM's output in the file <log> says
+#                         "update fail" for it, when it is not installed, or
+#                         when TPM exited with a <status> other than 0 and
+#                         its HEAD did not move.
+# TPM's whole output follows when an update failed, when TPM exited with
+# another status than 0, or when there is no plugin to list.
+tpp_update_summary() {
+	local heads=$1 log=$2 rc=$3 name old spec new dir label result failed=0 width=0 i pad
+	local -a labels widths results
+	while IFS=$'\t' read -r name old spec; do
+		[[ -n $name ]] || continue
+		dir="$TPP_PLUGIN_DIR$name"
+		new=-
+		if [[ $old != - ]]; then
+			new=$(tpp_head "$dir") || new=-
+		fi
+		if [[ $old == - || $new == - ]] || grep -qxF "  \"$name\" update fail" "$log"; then
+			result="update failed"
+			failed=1
+		elif [[ $new != "$old" ]]; then
+			result="$(tpp_git "$dir" rev-parse --short "$old") → $(tpp_git "$dir" rev-parse --short "$new")"
+		elif ((rc)); then
+			result="update failed"
+			failed=1
+		else
+			result="already up to date"
+		fi
+		label=$(tpp_label "$name" "$spec")
+		labels+=("$(tpp_style_label "$label" "$spec")")
+		widths+=("${#label}")
+		results+=("$result")
+		((${#label} > width)) && width=${#label}
+	done <"$heads"
+	for i in "${!labels[@]}"; do
+		printf -v pad '%*s' $((width - widths[i] + 2)) ''
+		printf '%s%s%s\n' "${labels[i]}" "$pad" "${results[i]}"
+	done
+	if ((failed || rc || ${#labels[@]} == 0)); then
+		((${#labels[@]})) && printf '\n'
+		cat "$log"
+	fi
+	return 0
+}
+
 # Preview text for one plugin.
 tpp_preview() {
 	local name=$1 decl spec='' source='' dir url

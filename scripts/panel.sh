@@ -76,20 +76,28 @@ run_tpm() {
 	return "$rc"
 }
 
+# Updates through TPM, and instead of TPM's output, in which the plugins
+# updated in parallel interleave, prints one line per plugin from the commits
+# before and after (see tpp_update_summary).
 cmd_update() {
-	local message
+	local heads log count noun=plugins rc
 	if (($# == 0)); then
 		return 0
 	fi
 	clear_screen
-	if [[ $1 == all ]]; then
-		message='Updating all plugins'
-	elif (($# == 1)); then
-		message='Updating 1 plugin'
-	else
-		message="Updating $# plugins"
+	heads=$(mktemp) || return 1
+	if ! log=$(mktemp); then
+		rm -f "$heads"
+		return 1
 	fi
-	run_tpm "$message" "$TPP_TPM_DIR/bin/update_plugins" "$@"
+	tpp_update_heads "$@" >"$heads"
+	count=$(grep -c . "$heads")
+	((count == 1)) && noun=plugin
+	tpp_spin "Updating $count $noun" "$log" "$TPP_TPM_DIR/bin/update_plugins" "$@"
+	rc=$?
+	tpp_update_summary "$heads" "$log" "$rc"
+	((rc == 130)) && printf '\nInterrupted.\n'
+	rm -f "$heads" "$log"
 	reload_tmux_config
 	pause
 }
