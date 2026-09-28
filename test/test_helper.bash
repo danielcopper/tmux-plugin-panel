@@ -26,7 +26,7 @@ tpp_setup() {
 	SOCKET_ROOT=$(mktemp -d /tmp/tpp.XXXX)
 	TEST_SOCKET="tpp-test-$$-$RANDOM"
 
-	unset TMUX TMUX_PANE TMUX_PLUGIN_MANAGER_PATH
+	unset TMUX TMUX_PANE TMUX_PLUGIN_MANAGER_PATH GIT_SSH GIT_SSH_COMMAND
 	export TMUX_TMPDIR="$SOCKET_ROOT"
 	export HOME="$TEST_ROOT/home"
 	export XDG_CONFIG_HOME="$HOME/.config"

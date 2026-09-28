@@ -102,7 +102,11 @@ tpp_plugin_name() {
 # The source lines are split into words and globbed exactly as TPM does in
 # `for file in $(_sourced_files); do cat $(_manual_expansion "$file")`, so a
 # line with several paths or a trailing comment gives the same files as TPM.
-# Words that are not files (such as "#") are dropped by the callers' -f test.
+# Words that are not files (such as "#") are printed too; the callers drop
+# them (the -f test in tpp_declarations, the path comparison in
+# tpp_panel_file_sourced). A relative word resolves against the panel's
+# working directory (the popup starts in the pane's directory), which need
+# not be the directory TPM ran in.
 tpp_config_files() {
 	{
 		printf '%s\n' /etc/tmux.conf "$TPP_USER_CONF"
@@ -208,6 +212,29 @@ tpp_age() {
 	printf '%s\n' "${age:--}"
 }
 
+# tpp_ssh_command <dir>: the ssh command git would use for <dir>, in git's
+# order (GIT_SSH_COMMAND, core.sshCommand, GIT_SSH, ssh), with
+# "-o BatchMode=yes" appended so ssh fails instead of prompting over the fzf
+# screen. plink and tortoiseplink reject -o, so a program whose name contains
+# "plink" is left as it is.
+tpp_ssh_command() {
+	local cmd=${GIT_SSH_COMMAND-} program
+	if [[ -z $cmd ]]; then
+		cmd=$(git -C "$1" config core.sshCommand) || cmd=''
+	fi
+	if [[ -n $cmd ]]; then
+		program=${cmd%%[[:space:]]*}
+	elif [[ -n ${GIT_SSH-} ]]; then
+		cmd=$(printf '%q' "$GIT_SSH")
+		program=$GIT_SSH
+	else
+		cmd=ssh
+		program=ssh
+	fi
+	[[ ${program##*/} == *plink* ]] || cmd="$cmd -o BatchMode=yes"
+	printf '%s\n' "$cmd"
+}
+
 tpp_timeout_cmd() {
 	if command -v timeout >/dev/null 2>&1; then
 		echo timeout
@@ -224,12 +251,7 @@ tpp_fetch_all() {
 	for dir in "$TPP_PLUGIN_DIR"*/; do
 		[[ -d $dir ]] || continue
 		tpp_is_git_checkout "$dir" || continue
-		# BatchMode: ssh must fail instead of prompting over the fzf screen.
-		ssh_cmd=${GIT_SSH_COMMAND-}
-		if [[ -z $ssh_cmd ]]; then
-			ssh_cmd=$(git -C "$dir" config core.sshCommand) || ssh_cmd=''
-		fi
-		ssh_cmd="${ssh_cmd:-ssh} -o BatchMode=yes"
+		ssh_cmd=$(tpp_ssh_command "$dir")
 		if [[ -n $timeout_cmd ]]; then
 			GIT_SSH_COMMAND=$ssh_cmd LC_ALL=C GIT_TERMINAL_PROMPT=0 \
 				"$timeout_cmd" -k 2 "$TPP_FETCH_TIMEOUT" \

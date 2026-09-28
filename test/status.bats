@@ -127,9 +127,22 @@ teardown() {
 	load_lib
 	tpp_fetch_all
 	[ "$(cat "$TEST_ROOT/ssh-cmd")" = "ssh -i key -o BatchMode=yes" ]
+	GIT_SSH=/opt/my-ssh tpp_fetch_all
+	[ "$(cat "$TEST_ROOT/ssh-cmd")" = "ssh -i key -o BatchMode=yes" ]
 	git -C "$PLUGIN_DIR/alpha" config --unset core.sshCommand
 	tpp_fetch_all
 	[ "$(cat "$TEST_ROOT/ssh-cmd")" = "ssh -o BatchMode=yes" ]
+	GIT_SSH="/opt/my ssh" tpp_fetch_all
+	[ "$(cat "$TEST_ROOT/ssh-cmd")" = "/opt/my\\ ssh -o BatchMode=yes" ]
+	GIT_SSH_COMMAND="ssh -v" GIT_SSH=/opt/my-ssh tpp_fetch_all
+	[ "$(cat "$TEST_ROOT/ssh-cmd")" = "ssh -v -o BatchMode=yes" ]
+}
+
+@test "plink is not given ssh's -o option" {
+	load_lib
+	[ "$(GIT_SSH='C:/Program Files/PuTTY/plink.exe' tpp_ssh_command "$TEST_ROOT")" = 'C:/Program\ Files/PuTTY/plink.exe' ]
+	[ "$(GIT_SSH_COMMAND='/usr/bin/tortoiseplink -batch' tpp_ssh_command "$TEST_ROOT")" = '/usr/bin/tortoiseplink -batch' ]
+	[ "$(GIT_SSH_COMMAND='ssh -4' tpp_ssh_command "$TEST_ROOT")" = 'ssh -4 -o BatchMode=yes' ]
 }
 
 @test "a remote that does not answer is abandoned after the timeout" {
