@@ -220,3 +220,27 @@ EOF
 	done
 	[ "$found" -eq 1 ]
 }
+
+@test "the panel shows fzf's info line, where fzf's spinner runs while the list loads" {
+	# The same fake fzf as in the test above. fzf 0.36 animates its spinner
+	# only in the default info style; inline shows a static marker.
+	cat >"$TEST_ROOT/bin/fzf" <<EOF2
+#!/usr/bin/env bash
+[[ \$1 == --version ]] && { echo "999.0.0 (fake)"; exit 0; }
+printf '%s\n' "\$@" >"$TEST_ROOT/fzf-argv"
+cat >/dev/null
+EOF2
+	chmod +x "$TEST_ROOT/bin/fzf"
+	run "$TPP_ROOT/scripts/panel.sh"
+	[ "$status" -eq 0 ]
+	local -a argv
+	mapfile -t argv <"$TEST_ROOT/fzf-argv"
+	local i info=
+	for i in "${!argv[@]}"; do
+		case ${argv[i]} in
+		--info) info=${argv[i + 1]} ;;
+		--info=*) info=${argv[i]#*=} ;;
+		esac
+	done
+	[ "$info" = default ]
+}

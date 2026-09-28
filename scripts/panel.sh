@@ -62,21 +62,50 @@ warn_if_not_sourced() {
 	printf "Add this line before \"run '…/tpm/tpm'\":  source-file %s\n" "$TPP_PANEL_FILE"
 }
 
+# run_tpm <message> <script> [<arg>...]: runs one of TPM's scripts behind the
+# spinner, then prints what it printed.
+run_tpm() {
+	local message=$1 log rc
+	shift
+	log=$(mktemp) || return 1
+	tpp_spin "$message" "$log" "$@"
+	rc=$?
+	cat "$log"
+	rm -f "$log"
+	((rc == 130)) && printf 'Interrupted.\n'
+	return "$rc"
+}
+
+# Updates through TPM, and instead of TPM's output, in which the plugins
+# updated in parallel interleave, prints one line per plugin from the commits
+# before and after, with TPM's output only when something failed (see
+# tpp_update_summary).
 cmd_update() {
+	local heads log count noun=plugins rc
 	if (($# == 0)); then
 		return 0
 	fi
 	clear_screen
-	printf 'Updating: %s\n\n' "$*"
-	"$TPP_TPM_DIR/bin/update_plugins" "$@"
+	heads=$(mktemp) || return 1
+	if ! log=$(mktemp); then
+		rm -f "$heads"
+		return 1
+	fi
+	tpp_update_heads "$@" >"$heads"
+	count=$(grep -c . "$heads")
+	((count == 1)) && noun=plugin
+	tpp_spin "Updating $count $noun" "$log" "$TPP_TPM_DIR/bin/update_plugins" "$@"
+	rc=$?
+	tpp_update_summary "$heads" "$log" "$rc"
+	((rc == 130)) && printf '\nInterrupted.\n'
+	rm -f "$heads" "$log"
 	reload_tmux_config
 	pause
 }
 
 cmd_install() {
 	clear_screen
-	printf 'Installing missing plugins\n\n'
-	"$TPP_TPM_DIR/bin/install_plugins"
+	run_tpm 'Installing missing plugins' "$TPP_TPM_DIR/bin/install_plugins"
 	reload_tmux_config
 	pause
 }
@@ -91,7 +120,7 @@ cmd_clean() {
 	fi
 	printf 'Directories without a declaration:\n%s\n\n' "$undeclared"
 	if confirm "Let TPM remove them?"; then
-		"$TPP_TPM_DIR/bin/clean_plugins"
+		run_tpm 'Cleaning' "$TPP_TPM_DIR/bin/clean_plugins"
 		reload_tmux_config
 	fi
 	pause
@@ -110,7 +139,7 @@ cmd_add() {
 		printf "\nAdded: set -g @plugin '%s'\n" "$spec"
 		warn_if_not_sourced
 		printf '\n'
-		"$TPP_TPM_DIR/bin/install_plugins"
+		run_tpm "Installing $(tpp_display_name "$spec")" "$TPP_TPM_DIR/bin/install_plugins"
 		reload_tmux_config
 	fi
 	pause
@@ -163,7 +192,7 @@ run_ui() {
 	tpp_collect_checking | tpp_format_rows |
 		fzf --multi --ansi --no-sort --layout=reverse --disabled \
 			--delimiter $'\t' --with-nth 2.. --header-lines 1 \
-			--prompt '' --info hidden --header "$(header)" \
+			--prompt '' --info default --no-separator --header "$(header)" \
 			--preview "$self preview {1}" --preview-window 'down,50%,wrap' \
 			--bind "load:reload-sync($self rows --fetch)+unbind(load)" \
 			--bind 'change:clear-query' \
@@ -188,6 +217,7 @@ run_ui() {
 main() {
 	local cmd=${1-ui}
 	(($#)) && shift
+	tpp_disable_credential_helpers
 	if [[ $cmd == ui ]]; then
 		check_dependencies
 		tpp_init || fail_and_exit "cannot start"
@@ -195,6 +225,13 @@ main() {
 		return
 	fi
 	tpp_init || exit 1
+	case $cmd in
+	# The actions write to the terminal themselves: fzf before 0.53 gives an
+	# execute'd command fzf's own stdout, which run_ui sends to /dev/null.
+	# Here, and not in the bindings, because fzf runs a binding's command
+	# with the user's $SHELL, which need not understand a redirection.
+	update | install | clean | add | remove) exec >/dev/tty 2>&1 ;;
+	esac
 	case $cmd in
 	rows)
 		[[ ${1-} == --fetch ]] && tpp_fetch_all

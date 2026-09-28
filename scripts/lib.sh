@@ -14,6 +14,7 @@
 TPP_FETCH_TIMEOUT=10
 TPP_MIN_TMUX=3.2
 TPP_PLUGIN_LINE_RE='^[ \t]*set(-option)? +-g +@plugin'
+TPP_SPINNER_FRAMES=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 
 tpp_err() {
 	printf 'tmux-plugin-panel: %s\n' "$*" >&2
@@ -165,6 +166,36 @@ tpp_declared_outside_panel_file() {
 		fi
 	done < <(tpp_declarations)
 	return 1
+}
+
+# TPM's GitHub URLs as a credential.<url> pattern: TPM clones a plugin
+# declared as owner/repo from https://git::@github.com/owner/repo, user "git"
+# with an empty password at github.com over https.
+TPP_TPM_CREDENTIAL_URL=https://git@github.com
+
+# Makes every git process started from here on, the panel's own and those of
+# TPM's scripts, run without credential helpers for TPM's GitHub URLs: an
+# empty credential.<url>.helper for TPP_TPM_CREDENTIAL_URL clears the list of
+# helpers for the URLs it matches. After every successful clone, fetch or
+# pull, git hands the empty credentials in those URLs to the user's helpers
+# to store; some (libsecret, KWallet) print an error for them. Other users
+# and hosts keep their helpers. The setting is appended to the entries
+# already in GIT_CONFIG_COUNT, and not added again when it is already the
+# last entry, as it is when a subcommand inherits the environment of the
+# list. GIT_CONFIG_COUNT needs git 2.31; older git ignores it. A
+# GIT_CONFIG_COUNT that is not a number is left alone, git refuses to run
+# with it anyway.
+tpp_disable_credential_helpers() {
+	local count=${GIT_CONFIG_COUNT:-0} key value setting="credential.$TPP_TPM_CREDENTIAL_URL.helper"
+	[[ $count =~ ^[0-9]+$ ]] || return 0
+	count=$((10#$count))
+	if ((count > 0)); then
+		key=GIT_CONFIG_KEY_$((count - 1))
+		value=GIT_CONFIG_VALUE_$((count - 1))
+		[[ ${!key-} == "$setting" && -z ${!value-} ]] && return 0
+	fi
+	export "GIT_CONFIG_KEY_$count=$setting" "GIT_CONFIG_VALUE_$count=" \
+		"GIT_CONFIG_COUNT=$((count + 1))"
 }
 
 tpp_git() {
@@ -571,6 +602,101 @@ tpp_remove() {
 	printf 'removed %s\n' "$name"
 }
 
+# tpp_head <dir>: the commit checked out in plugin directory <dir>; false
+# when <dir> is not a git checkout.
+tpp_head() {
+	tpp_is_git_checkout "$1" || return 1
+	tpp_git "$1" rev-parse -q --verify HEAD
+}
+
+# tpp_update_heads <all|name...>: prints "name<TAB>head<TAB>spec" for the
+# plugins an update with the same arguments reports on, sorted by name. For
+# "all": every declared plugin whose directory is a git checkout (TPM's
+# update of all plugins skips a directory where `git remote` fails; outside
+# an enclosing repository that is the same set, and tpp_update_summary shows
+# TPM's output for a failed one it does not list). Otherwise: the named ones,
+# each with head "-" when it has no commit (no directory, or not a git
+# checkout). head is the commit checked out; spec is the first declaration
+# of the plugin, empty when there is none. Unlike tpp_collect it reads no
+# ages: the update needs only the commits.
+tpp_update_heads() {
+	local decls spec _source name names head seen=$'\n' declared=''
+	decls=$(tpp_declarations)
+	while IFS=$'\t' read -r spec _source; do
+		[[ -n $spec ]] || continue
+		name=$(tpp_plugin_name "$spec")
+		[[ $seen == *$'\n'"$name"$'\n'* ]] && continue
+		seen+="$name"$'\n'
+		declared+="$name"$'\t'"$spec"$'\n'
+	done <<<"$decls"
+	if [[ $1 == all ]]; then
+		names=$(cut -f 1 <<<"$declared" | LC_ALL=C sort)
+	else
+		names=$(for name; do tpp_plugin_name "${name%%#*}"; done | LC_ALL=C sort -u)
+	fi
+	while IFS= read -r name; do
+		[[ -n $name ]] || continue
+		if ! head=$(tpp_head "$TPP_PLUGIN_DIR$name"); then
+			[[ $1 == all ]] && continue
+			head=-
+		fi
+		spec=$(awk -F '\t' -v n="$name" '$1 == n { print $2; exit }' <<<"$declared")
+		printf '%s\t%s\t%s\n' "$name" "$head" "$spec"
+	done <<<"$names"
+}
+
+# tpp_update_summary <heads> <log> <status>: the result of TPM's update, one
+# line per plugin in the file <heads> (from tpp_update_heads, written before
+# the update): the plugin's name as the list shows it, then
+#   "<old> → <new>"       the short commits, when its HEAD moved;
+#   "already up to date"  when it did not;
+#   "update failed"       when TPM's output in the file <log> says
+#                         "update fail" for it, when it is not installed, or
+#                         when TPM exited with a <status> other than 0 and
+#                         its HEAD did not move.
+# TPM's whole output follows when an update failed, when TPM's output says
+# "update fail" for any plugin (also one not listed: TPM also pulls in a plain
+# directory inside an enclosing repository), when TPM exited with a status
+# other than 0, or when there is no plugin to list.
+tpp_update_summary() {
+	local heads=$1 log=$2 rc=$3 name old spec new dir label result failed=0 width=0 i pad
+	local -a labels widths results
+	while IFS=$'\t' read -r name old spec; do
+		[[ -n $name ]] || continue
+		dir="$TPP_PLUGIN_DIR$name"
+		new=-
+		if [[ $old != - ]]; then
+			new=$(tpp_head "$dir") || new=-
+		fi
+		if [[ $old == - || $new == - ]] || grep -qxF "  \"$name\" update fail" "$log"; then
+			result="update failed"
+			failed=1
+		elif [[ $new != "$old" ]]; then
+			result="$(tpp_git "$dir" rev-parse --short "$old") → $(tpp_git "$dir" rev-parse --short "$new")"
+		elif ((rc)); then
+			result="update failed"
+			failed=1
+		else
+			result="already up to date"
+		fi
+		label=$(tpp_label "$name" "$spec")
+		labels+=("$(tpp_style_label "$label" "$spec")")
+		widths+=("${#label}")
+		results+=("$result")
+		((${#label} > width)) && width=${#label}
+	done <"$heads"
+	for i in "${!labels[@]}"; do
+		printf -v pad '%*s' $((width - widths[i] + 2)) ''
+		printf '%s%s%s\n' "${labels[i]}" "$pad" "${results[i]}"
+	done
+	grep -qE '^  ".*" update fail$' "$log" && failed=1
+	if ((failed || rc || ${#labels[@]} == 0)); then
+		((${#labels[@]})) && printf '\n'
+		cat "$log"
+	fi
+	return 0
+}
+
 # Preview text for one plugin.
 tpp_preview() {
 	local name=$1 decl spec='' source='' dir url
@@ -616,4 +742,64 @@ tpp_preview() {
 	else
 		printf '\nno pending commits\n'
 	fi
+}
+
+# tpp_spinner <message> <owner>: the spinner line of tpp_spin, run in the
+# background: "<message> ⠋", with the frame turning every 0.1 s until it is
+# killed, process <owner> is gone, or the terminal it started on is gone. It
+# draws nothing while the terminal's modes differ from those it started with:
+# a program asking for a passphrase (ssh) turns echo off while it waits for
+# the answer. Every redraw saves and restores the cursor (ESC 7, ESC 8), so a
+# prompt printed on the spinner's line keeps its cursor where the answer
+# goes. Without a terminal at the start (no /dev/tty), it draws every frame
+# and does not check the terminal's modes.
+tpp_spinner() {
+	local message=$1 owner=$2 modes now i=1
+	modes=$(stty -g 2>/dev/null </dev/tty)
+	printf '\r%s %s' "$message" "${TPP_SPINNER_FRAMES[0]}"
+	while sleep 0.1 && kill -0 "$owner" 2>/dev/null; do
+		if [[ -n $modes ]]; then
+			now=$(stty -g 2>/dev/null </dev/tty) || return 0
+			[[ $now == "$modes" ]] || continue
+		fi
+		printf '\0337\r%s %s\0338' "$message" "${TPP_SPINNER_FRAMES[i++ % ${#TPP_SPINNER_FRAMES[@]}]}" ||
+			return 0
+	done
+}
+
+# tpp_spin <message> <log> <command> [<arg>...]: runs <command> in the
+# foreground with its output (stdout and stderr) in the file <log>, while
+# tpp_spinner shows "<message> ⠋" in the background; then clears the line.
+# Returns the command's exit status.
+#
+# The command gets a process group of its own, which a child shell with job
+# control (set -m) makes the terminal's foreground group, as an interactive
+# shell does: a prompt the command shows on the terminal (ssh asking for a
+# passphrase) can read the answer, and Ctrl-C reaches the command's group
+# only. The child shell is needed because bash, with job control on, answers
+# a foreground job killed by Ctrl-C by interrupting itself. Whatever is left
+# in the group afterwards (TPM's background jobs ignore SIGINT) is sent
+# SIGTERM, then SIGCONT so that a member stopped by job control (for example
+# by SIGTTIN) wakes up and receives it.
+tpp_spin() {
+	# The owner is taken here: the words of a background command are expanded
+	# in the forked child, where $BASHPID would be the spinner's own pid.
+	# $$ (bash 3.2 has no BASHPID) is the script's shell, which runs tpp_spin.
+	local message=$1 log=$2 owner=$$ group spinner rc
+	shift 2
+	group=$(mktemp) || return 1
+	tpp_spinner "$message" "$owner" &
+	spinner=$!
+	bash -c 'set -m; log=$1; shift; "$@" >"$log" 2>&1 & echo "$!" >"$0"; fg %% >/dev/null' \
+		"$group" "$log" "$@"
+	rc=$?
+	if [[ -s $group ]]; then
+		kill -TERM -- "-$(<"$group")" 2>/dev/null
+		kill -CONT -- "-$(<"$group")" 2>/dev/null
+	fi
+	rm -f "$group"
+	kill "$spinner" 2>/dev/null
+	wait "$spinner" 2>/dev/null
+	printf '\r\033[K'
+	return "$rc"
 }
