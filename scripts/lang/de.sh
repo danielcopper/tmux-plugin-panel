@@ -3,7 +3,7 @@
 #
 # The German messages. See en.sh for how a catalogue is built.
 
-TPP_MSG_HINT_UPDATE='Update'
+TPP_MSG_HINT_UPDATE='aktualisieren'
 TPP_MSG_HINT_ALL='alle'
 TPP_MSG_HINT_ADD='hinzufügen'
 TPP_MSG_HINT_REMOVE='entfernen'

@@ -150,7 +150,7 @@ ${YELLOW}~/.config/tmux/plugins.conf is not sourced from ~/.config/tmux/tmux.con
 	local header
 	header=$(fzf_option --header)
 	[ "$header" = "Plugins ~/.config/tmux/plugins/   Datei ~/.config/tmux/plugins.conf
-enter/u Update · U alle · a hinzufügen · d entfernen
+enter/u aktualisieren · U alle · a hinzufügen · d entfernen
 i installieren · c aufräumen · r neu laden · tab markieren · q beenden
 j/k bewegen · J/K Vorschau scrollen · ctrl-d/ctrl-u Vorschau um eine halbe Seite scrollen" ]
 	run cat "$TEST_ROOT/fzf-input"
