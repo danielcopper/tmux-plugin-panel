@@ -169,9 +169,13 @@ EOF2
 		sleep 0.1
 	done
 	[ "$(alive "$TEST_ROOT/pids" | wc -l)" -eq 3 ]
+	local group
+	group=$(tail -n 1 "$TEST_ROOT/pids")
+	# The runner too, for teardown, should it be left waiting for its spinner.
+	echo "$pid" >>"$TEST_ROOT/pids"
 	# Ctrl-C: the terminal sends SIGINT to its foreground process group,
 	# which is the command's own, led by the command.
-	kill -INT -- "-$(tail -n 1 "$TEST_ROOT/pids")"
+	kill -INT -- "-$group"
 	for _ in $(seq 50); do
 		kill -0 "$pid" 2>/dev/null || break
 		sleep 0.1
@@ -248,7 +252,7 @@ EOF2
 	local panel
 	panel=$(printf '%q' "$TPP_ROOT/scripts/panel.sh")
 	# y and enter answer the question, x is the key for "Press any key".
-	run bash -c 'printf "y\rx" | SHELL=/bin/bash script -qec "$1 clean" /dev/null' _ "$panel"
+	run bash -c 'printf "y\rx" | SHELL=/bin/bash timeout 30 script -qec "$1 clean" /dev/null' _ "$panel"
 	[ "$status" -eq 0 ]
 	[[ $output == *"Cleaning ⠋"*$'\r\033[K''Removing "orphan"'*'"orphan" clean success'* ]]
 	[ ! -e "$PLUGIN_DIR/orphan" ]
@@ -261,7 +265,7 @@ EOF2
 	panel=$(printf '%q' "$TPP_ROOT/scripts/panel.sh")
 	url=$(remote_url alpha)
 	# The plugin and enter answer the prompt, x is the key for "Press any key".
-	run bash -c 'printf "%s\rx" "$2" | SHELL=/bin/bash script -qec "$1 add" /dev/null' _ "$panel" "$url"
+	run bash -c 'printf "%s\rx" "$2" | SHELL=/bin/bash timeout 30 script -qec "$1 add" /dev/null' _ "$panel" "$url"
 	[ "$status" -eq 0 ]
 	[[ $output == *"Installing $url ⠋"*$'\r\033[K''Installing "alpha"'*'"alpha" download success'* ]]
 	[ -d "$PLUGIN_DIR/alpha/.git" ]

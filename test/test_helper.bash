@@ -28,6 +28,10 @@ tpp_setup() {
 
 	unset TMUX TMUX_PANE TMUX_PLUGIN_MANAGER_PATH GIT_SSH GIT_SSH_COMMAND
 	export TMUX_TMPDIR="$SOCKET_ROOT"
+	# Temporary files of the code under test (mktemp) land in the test's
+	# directory, so teardown removes them even when a test kills the code
+	# before it cleans up.
+	export TMPDIR="$TEST_ROOT"
 	export HOME="$TEST_ROOT/home"
 	export XDG_CONFIG_HOME="$HOME/.config"
 	export GIT_CONFIG_NOSYSTEM=1
@@ -146,7 +150,9 @@ status_of() {
 
 # on_terminal <command>: runs the shell command <command> on a terminal of its
 # own (a pty from util-linux script) and prints what the terminal showed. The
-# terminal gets one key press as input, for the panel's "Press any key".
+# terminal gets one key press as input, for the panel's "Press any key". A
+# command that does not finish within 30 seconds is stopped and fails, so a
+# hanging command cannot hang the suite.
 on_terminal() {
-	printf x | SHELL=/bin/bash script -qec "$1" /dev/null
+	printf x | SHELL=/bin/bash timeout 30 script -qec "$1" /dev/null
 }
