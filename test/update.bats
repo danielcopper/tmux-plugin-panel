@@ -130,6 +130,22 @@ EOF2
 	[[ $output != *"update failed"* ]]
 }
 
+@test "TPM's output shows when an update the summary leaves out failed" {
+	# A plain directory inside another repository is not a git checkout, so
+	# the summary leaves it out; TPM's update of all plugins still runs git
+	# pull there, in the enclosing repository, which has no remote to pull.
+	git init -q "$XDG_CONFIG_HOME"
+	mkdir -p "$PLUGIN_DIR/plain"
+	touch "$PLUGIN_DIR/plain/plain.tmux"
+	declare_plugin someone/plain
+	run update all
+	[ "$status" -eq 0 ]
+	[ "${lines[0]}" = "${DIM}someone/${RESET}${BOLD}alpha${RESET}  already up to date" ]
+	[ "${lines[1]}" = "${DIM}someone/${RESET}${BOLD}beta${RESET}   already up to date" ]
+	grep -qxF '  "plain" update fail' "$TEST_ROOT/log"
+	[[ $output == *'"plain" update fail'* ]]
+}
+
 @test "an update with no plugin to list shows TPM's output" {
 	rm -rf "$PLUGIN_DIR/alpha" "$PLUGIN_DIR/beta"
 	run update all

@@ -652,8 +652,10 @@ tpp_update_heads() {
 #                         "update fail" for it, when it is not installed, or
 #                         when TPM exited with a <status> other than 0 and
 #                         its HEAD did not move.
-# TPM's whole output follows when an update failed, when TPM exited with
-# a status other than 0, or when there is no plugin to list.
+# TPM's whole output follows when an update failed, when TPM's output says
+# "update fail" for any plugin (also one not listed: TPM also pulls in a plain
+# directory inside an enclosing repository), when TPM exited with a status
+# other than 0, or when there is no plugin to list.
 tpp_update_summary() {
 	local heads=$1 log=$2 rc=$3 name old spec new dir label result failed=0 width=0 i pad
 	local -a labels widths results
@@ -685,6 +687,7 @@ tpp_update_summary() {
 		printf -v pad '%*s' $((width - widths[i] + 2)) ''
 		printf '%s%s%s\n' "${labels[i]}" "$pad" "${results[i]}"
 	done
+	grep -qE '^  ".*" update fail$' "$log" && failed=1
 	if ((failed || rc || ${#labels[@]} == 0)); then
 		((${#labels[@]})) && printf '\n'
 		cat "$log"
