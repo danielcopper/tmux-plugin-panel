@@ -190,11 +190,13 @@ binding_of() {
 }
 
 @test "the panel runs fzf with exactly one header line, so the column header is never an item" {
-	# A fake fzf on PATH, like the tmux shim: answers the version check and
-	# records the arguments of the list's invocation, one per line.
+	# A fake fzf on PATH, like the tmux shim: records the arguments of the
+	# list's invocation, one per line. Its version is above any minimum the
+	# panel may require: a failed version check would wait for a key on the
+	# terminal.
 	cat >"$TEST_ROOT/bin/fzf" <<EOF
 #!/usr/bin/env bash
-[[ \$1 == --version ]] && { echo "0.36.0 (fake)"; exit 0; }
+[[ \$1 == --version ]] && { echo "999.0.0 (fake)"; exit 0; }
 printf '%s\n' "\$@" >"$TEST_ROOT/fzf-argv"
 cat >/dev/null
 EOF
