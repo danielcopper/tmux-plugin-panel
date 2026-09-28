@@ -146,6 +146,18 @@ EOF2
 	[[ $output == *'"plain" update fail'* ]]
 }
 
+@test "a plugin declared twice is listed once, under its first declaration" {
+	declare_plugin https://gitlab.com/other/alpha.git
+	load_lib
+	tpp_update_heads all >"$TEST_ROOT/heads"
+	: >"$TEST_ROOT/log"
+	run tpp_update_summary "$TEST_ROOT/heads" "$TEST_ROOT/log" 0
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 2 ]
+	[ "${lines[0]}" = "${DIM}someone/${RESET}${BOLD}alpha${RESET}  already up to date" ]
+	[ "${lines[1]}" = "${DIM}someone/${RESET}${BOLD}beta${RESET}   already up to date" ]
+}
+
 @test "an update with no plugin to list shows TPM's output" {
 	rm -rf "$PLUGIN_DIR/alpha" "$PLUGIN_DIR/beta"
 	run update all
