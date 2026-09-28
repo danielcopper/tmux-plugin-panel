@@ -13,7 +13,7 @@ main() {
 		tmux display-message "tmux-plugin-panel: tmux $TPP_MIN_TMUX or newer is required"
 		return 0
 	fi
-	key=$(tpp_tmux_option @plugin-panel-key P)
+	key=$(tpp_tmux_option @tmux-plugin-panel-key P)
 	tmux bind-key "$key" display-popup -E -w 80% -h 70% \
 		"$(printf '%q' "$CURRENT_DIR/scripts/panel.sh")"
 }

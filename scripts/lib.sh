@@ -1,7 +1,9 @@
 # shellcheck shell=bash
 #
-# Functions shared by the panel and the tests. Sourcing this file has no side
-# effects; call tpp_init before anything that needs TPM or the tmux server.
+# Functions shared by the panel and the tests. Sourcing this file only
+# defines constants and functions. tpp_init asks the tmux server for the plugin
+# directory and options, and sources TPM's helpers; call it before anything
+# that reads declarations or plugin directories.
 #
 # Globals set by tpp_init:
 #   TPP_PLUGIN_DIR  plugin directory, with a trailing slash
@@ -87,7 +89,7 @@ tpp_init() {
 	# shellcheck source=/dev/null
 	source "$TPP_TPM_DIR/scripts/helpers/plugin_functions.sh"
 	TPP_USER_CONF=$(_get_user_tmux_conf)
-	TPP_PANEL_FILE=$(tpp_expand_path "$(tpp_tmux_option @plugin-panel-file "$HOME/.config/tmux/plugins.conf")")
+	TPP_PANEL_FILE=$(tpp_expand_path "$(tpp_tmux_option @tmux-plugin-panel-file "$HOME/.config/tmux/plugins.conf")")
 }
 
 # Name of the plugin directory for a declaration, as TPM derives it.
@@ -96,19 +98,19 @@ tpp_plugin_name() {
 }
 
 # The config files TPM reads declarations from: /etc/tmux.conf, the user's
-# config and every file it sources (one level), each listed once. Glob
-# patterns are expanded, as TPM's unquoted `cat $(...)` does.
+# config and every file it sources (one level), each listed once.
+# The source lines are split into words and globbed exactly as TPM does in
+# `for file in $(_sourced_files); do cat $(_manual_expansion "$file")`, so a
+# line with several paths or a trailing comment gives the same files as TPM.
+# Words that are not files (such as "#") are dropped by the callers' -f test.
 tpp_config_files() {
 	{
 		printf '%s\n' /etc/tmux.conf "$TPP_USER_CONF"
-		local file
-		_sourced_files | while IFS= read -r file; do
-			file=$(_manual_expansion "$file")
-			if [[ $file == *[*?[]* ]]; then
-				compgen -G "$file"
-			else
+		local IFS=$' \t\n' word file
+		for word in $(_sourced_files); do
+			for file in $(_manual_expansion "$word"); do
 				printf '%s\n' "$file"
-			fi
+			done
 		done
 	} | awk '!seen[$0]++'
 }
@@ -217,16 +219,23 @@ tpp_timeout_cmd() {
 # Fetches every installed plugin in parallel. Each fetch is bounded by
 # TPP_FETCH_TIMEOUT seconds when a timeout command is available.
 tpp_fetch_all() {
-	local dir timeout_cmd
+	local dir timeout_cmd ssh_cmd
 	timeout_cmd=$(tpp_timeout_cmd)
 	for dir in "$TPP_PLUGIN_DIR"*/; do
 		[[ -d $dir ]] || continue
 		tpp_is_git_checkout "$dir" || continue
+		# BatchMode: ssh must fail instead of prompting over the fzf screen.
+		ssh_cmd=${GIT_SSH_COMMAND-}
+		if [[ -z $ssh_cmd ]]; then
+			ssh_cmd=$(git -C "$dir" config core.sshCommand) || ssh_cmd=''
+		fi
+		ssh_cmd="${ssh_cmd:-ssh} -o BatchMode=yes"
 		if [[ -n $timeout_cmd ]]; then
-			LC_ALL=C GIT_TERMINAL_PROMPT=0 "$timeout_cmd" -k 2 "$TPP_FETCH_TIMEOUT" \
+			GIT_SSH_COMMAND=$ssh_cmd LC_ALL=C GIT_TERMINAL_PROMPT=0 \
+				"$timeout_cmd" -k 2 "$TPP_FETCH_TIMEOUT" \
 				git -C "$dir" fetch --quiet </dev/null >/dev/null 2>&1 &
 		else
-			tpp_git "$dir" fetch --quiet </dev/null >/dev/null 2>&1 &
+			GIT_SSH_COMMAND=$ssh_cmd tpp_git "$dir" fetch --quiet </dev/null >/dev/null 2>&1 &
 		fi
 	done
 	wait
@@ -234,10 +243,12 @@ tpp_fetch_all() {
 
 # Prints one record per plugin, sorted by name:
 #   name<TAB>status<TAB>age<TAB>spec<TAB>source
-# age is "-" when unknown; spec and source are empty for undeclared ones.
-# Declared plugins come first from the declarations; directories without a
-# declaration (except tpm) follow as "not declared". With --checking, the
-# status of installed plugins is "checking…" instead of being computed.
+# Every declared plugin is listed once (the first declaration of a name wins),
+# and so is every directory in the plugin directory without a declaration,
+# as "not declared" (tpm itself is left out). age is "-" when unknown; spec
+# and source are empty for undeclared directories. With --checking, a
+# declared plugin that is installed gets "checking…" instead of a computed
+# status; the other rows are unchanged.
 tpp_collect() {
 	local checking=0 decls spec source name dir status age
 	[[ ${1-} == --checking ]] && checking=1
@@ -364,7 +375,7 @@ tpp_normalize_spec() {
 # Refuses to write when the panel file is the user's tmux config.
 tpp_panel_file_writable() {
 	if [[ $TPP_PANEL_FILE == "$TPP_USER_CONF" || ($TPP_PANEL_FILE -ef $TPP_USER_CONF) ]]; then
-		tpp_err "@plugin-panel-file points at $TPP_USER_CONF; the panel never edits the tmux config"
+		tpp_err "@tmux-plugin-panel-file points at $TPP_USER_CONF; the panel never edits the tmux config"
 		return 1
 	fi
 }
@@ -397,6 +408,16 @@ tpp_add() {
 	printf '%s\n' "$spec"
 }
 
+# True when the panel file declares plugin <name>.
+tpp_panel_file_declares() {
+	local spec _source
+	[[ -f $TPP_PANEL_FILE ]] || return 1
+	while IFS=$'\t' read -r spec _source; do
+		[[ $(tpp_plugin_name "$spec") == "$1" ]] && return 0
+	done < <(tpp_declarations_in "$TPP_PANEL_FILE")
+	return 1
+}
+
 # Removes every declaration of plugin <name> from the panel file. The file
 # is rewritten in place so a symlinked file stays a symlink.
 tpp_remove_declaration() {
@@ -427,11 +448,14 @@ tpp_remove_declaration() {
 # tpp_remove <name>: removes the plugin's declaration from the panel file and
 # deletes its directory. A plugin declared anywhere else is left alone, panel
 # file line included, and a hint names the file to edit. tpm itself is never
-# removed.
+# removed. Surrounding whitespace in <name> is ignored; when there is neither
+# a line nor a directory, it says "nothing to remove" and succeeds.
 tpp_remove() {
-	local name=$1 source dir
+	local name=$1 source dir had_line=0 had_dir=0
+	name="${name#"${name%%[![:space:]]*}"}"
+	name="${name%"${name##*[![:space:]]}"}"
 	case $name in
-	"" | . | .. | */*)
+	"" | . | .. | */* | *$'\n'*)
 		tpp_err "invalid plugin name '$name'"
 		return 1
 		;;
@@ -448,9 +472,18 @@ tpp_remove() {
 		tpp_err "'$name' is declared in $source, remove the line there"
 		return 1
 	fi
-	tpp_remove_declaration "$name" || return 1
+	tpp_panel_file_declares "$name" && had_line=1
 	dir="${TPP_PLUGIN_DIR%/}/$name"
-	if [[ -e $dir || -L $dir ]]; then
+	[[ -e $dir || -L $dir ]] && had_dir=1
+	if ((!had_line && !had_dir)); then
+		printf 'nothing to remove for %s\n' "$name"
+		return 0
+	fi
+	if ((had_line)); then
+		tpp_remove_declaration "$name" || return 1
+	fi
+	if ((had_dir)); then
+		# No trailing slash: a symlinked plugin directory loses the link only.
 		rm -rf -- "$dir" || return 1
 	fi
 	printf 'removed %s\n' "$name"

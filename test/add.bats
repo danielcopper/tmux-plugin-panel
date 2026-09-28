@@ -80,7 +80,7 @@ assert_refused() {
 }
 
 @test "add creates a missing parent directory" {
-	tmux set -g @plugin-panel-file "$TEST_ROOT/elsewhere/deep/plugins.conf"
+	tmux set -g @tmux-plugin-panel-file "$TEST_ROOT/elsewhere/deep/plugins.conf"
 	load_lib
 	run tpp_add "someone/plugin"
 	[ "$status" -eq 0 ]
@@ -115,7 +115,7 @@ assert_refused() {
 }
 
 @test "add refuses to write when the panel file option points at tmux.conf" {
-	tmux set -g @plugin-panel-file "$TMUX_CONF"
+	tmux set -g @tmux-plugin-panel-file "$TMUX_CONF"
 	load_lib
 	local before
 	before=$(cat "$TMUX_CONF")
@@ -127,7 +127,7 @@ assert_refused() {
 
 @test "the panel file option is honoured and ~ is expanded" {
 	# shellcheck disable=SC2088 # a literal ~ is the input under test
-	tmux set -g @plugin-panel-file "~/custom/plugins.conf"
+	tmux set -g @tmux-plugin-panel-file "~/custom/plugins.conf"
 	load_lib
 	[ "$TPP_PANEL_FILE" = "$HOME/custom/plugins.conf" ]
 }

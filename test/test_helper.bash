@@ -3,7 +3,8 @@
 # Shared setup for the bats suite.
 #
 # Every test runs against its own tmux server on a private socket directory
-# (TMUX_TMPDIR) and socket name, with HOME and XDG_CONFIG_HOME pointing into a
+# (TMUX_TMPDIR, kept short under /tmp because a socket path is limited to about
+# 100 bytes) and socket name, with HOME and XDG_CONFIG_HOME pointing into a
 # temporary directory. A `tmux` shim first on PATH adds `-L <socket>` to every
 # call, so the panel, TPM's scripts and the tests all reach the test server and
 # never the user's. Plugin remotes are local bare repositories reached through
@@ -22,17 +23,20 @@ tpp_setup() {
 
 	REAL_TMUX=$(command -v tmux)
 	TEST_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/tpp.XXXXXX")
+	SOCKET_ROOT=$(mktemp -d /tmp/tpp.XXXX)
 	TEST_SOCKET="tpp-test-$$-$RANDOM"
 
 	unset TMUX TMUX_PANE TMUX_PLUGIN_MANAGER_PATH
-	export TMUX_TMPDIR="$TEST_ROOT/sock"
+	export TMUX_TMPDIR="$SOCKET_ROOT"
 	export HOME="$TEST_ROOT/home"
 	export XDG_CONFIG_HOME="$HOME/.config"
 	export GIT_CONFIG_NOSYSTEM=1
 	export GIT_ALLOW_PROTOCOL=file
 	export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 	export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
-	mkdir -p "$TMUX_TMPDIR" "$HOME" "$TEST_ROOT/bin" "$TEST_ROOT/remotes" "$TEST_ROOT/work"
+	# A fixed date keeps the relative age ("%cr") stable within a test.
+	export GIT_AUTHOR_DATE="2020-01-01T00:00:00Z" GIT_COMMITTER_DATE="2020-01-01T00:00:00Z"
+	mkdir -p "$HOME" "$TEST_ROOT/bin" "$TEST_ROOT/remotes" "$TEST_ROOT/work"
 
 	printf '#!/bin/sh\nexec "%s" -L "%s" "$@"\n' "$REAL_TMUX" "$TEST_SOCKET" >"$TEST_ROOT/bin/tmux"
 	chmod +x "$TEST_ROOT/bin/tmux"
@@ -50,6 +54,9 @@ tpp_teardown() {
 	if [[ -n ${TEST_ROOT:-} ]]; then
 		"$REAL_TMUX" -L "$TEST_SOCKET" kill-server 2>/dev/null || true
 		rm -rf "$TEST_ROOT"
+	fi
+	if [[ -n ${SOCKET_ROOT:-} ]]; then
+		rm -rf "$SOCKET_ROOT"
 	fi
 }
 

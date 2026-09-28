@@ -61,6 +61,50 @@ declarations_from_home() {
 	[ "$ours" = "$theirs" ]
 }
 
+@test "source lines with a trailing comment or several paths are split like TPM" {
+	mkdir -p "$HOME/extra"
+	{
+		printf 'source-file -q ~/.config/tmux/plugins.conf  # plugins\n'
+		printf 'source-file ~/extra/a.conf ~/extra/b.conf\n'
+		printf "run '%s/tpm/tpm'\n" "$PLUGIN_DIR"
+	} >"$TMUX_CONF"
+	declare_plugin "someone/in-panel"
+	declare_plugin "someone/in-a" "$HOME/extra/a.conf"
+	declare_plugin "someone/in-b" "$HOME/extra/b.conf"
+	load_lib
+	cd "$TEST_ROOT"
+	local ours theirs
+	ours=$(declarations_from_home | cut -f1 | sort)
+	theirs=$(tpm_plugins_list_helper | grep . | sort)
+	[ "$ours" = "$(printf 'someone/in-a\nsomeone/in-b\nsomeone/in-panel')" ]
+	[ "$ours" = "$theirs" ]
+	tpp_panel_file_sourced
+}
+
+@test "the panel's own options are not read as plugin declarations" {
+	{
+		printf "set -g @tmux-plugin-panel-key 'M-p'\n"
+		printf "set -g @tmux-plugin-panel-file '~/.config/tmux/plugins.conf'\n"
+	} >>"$TMUX_CONF"
+	declare_plugin "someone/real"
+	load_lib
+	local theirs
+	theirs=$(tpm_plugins_list_helper | grep .)
+	[ "$theirs" = "someone/real" ]
+	run tpp_collect
+	[ "$status" -eq 0 ]
+	[ "$(printf '%s\n' "$output" | cut -f1)" = "real" ]
+}
+
+@test "the panel file counts as sourced through another path to the same file" {
+	mkdir -p "$TEST_ROOT/dotfiles"
+	mv "$PANEL_FILE" "$TEST_ROOT/dotfiles/plugins.conf"
+	ln -s "$TEST_ROOT/dotfiles/plugins.conf" "$PANEL_FILE"
+	tmux set -g @tmux-plugin-panel-file "$TEST_ROOT/dotfiles/plugins.conf"
+	load_lib
+	tpp_panel_file_sourced
+}
+
 @test "a glob in a source line is expanded, as TPM does" {
 	mkdir -p "$HOME/conf.d"
 	printf "source-file -q ~/conf.d/*.conf\n" >>"$TMUX_CONF"

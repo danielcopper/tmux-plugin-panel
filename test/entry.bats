@@ -27,8 +27,8 @@ binding_of() {
 	[[ $output == *display-popup*-E*"$TPP_ROOT/scripts/panel.sh"* ]]
 }
 
-@test "@plugin-panel-key changes the key" {
-	tmux set -g @plugin-panel-key M-p
+@test "@tmux-plugin-panel-key changes the key" {
+	tmux set -g @tmux-plugin-panel-key M-p
 	run "$TPP_ROOT/tmux-plugin-panel.tmux"
 	[ "$status" -eq 0 ]
 	run binding_of M-p

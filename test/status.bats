@@ -116,6 +116,22 @@ teardown() {
 	[ "$(tpp_collect --checking | awk -F '\t' '$1 == "missing" { print $2 }')" = "not installed" ]
 }
 
+@test "fetch runs ssh in batch mode, keeping a configured ssh command" {
+	clone_plugin alpha
+	declare_plugin "$(remote_url alpha)"
+	# The upload-pack command runs under the fetch's environment, so it can
+	# record GIT_SSH_COMMAND for local remotes too.
+	git -C "$PLUGIN_DIR/alpha" config remote.origin.uploadpack \
+		"printf '%s\n' \"\$GIT_SSH_COMMAND\" >$TEST_ROOT/ssh-cmd; git-upload-pack"
+	git -C "$PLUGIN_DIR/alpha" config core.sshCommand "ssh -i key"
+	load_lib
+	tpp_fetch_all
+	[ "$(cat "$TEST_ROOT/ssh-cmd")" = "ssh -i key -o BatchMode=yes" ]
+	git -C "$PLUGIN_DIR/alpha" config --unset core.sshCommand
+	tpp_fetch_all
+	[ "$(cat "$TEST_ROOT/ssh-cmd")" = "ssh -o BatchMode=yes" ]
+}
+
 @test "a remote that does not answer is abandoned after the timeout" {
 	clone_plugin alpha
 	declare_plugin "$(remote_url alpha)"
