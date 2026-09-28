@@ -118,6 +118,18 @@ EOF2
 	[[ $output != *gamma* ]]
 }
 
+@test "an update of all plugins leaves out declared directories that are not git checkouts" {
+	# TPM's update of all plugins skips them too.
+	mkdir -p "$PLUGIN_DIR/gamma"
+	touch "$PLUGIN_DIR/gamma/gamma.tmux"
+	declare_plugin someone/gamma
+	run update all
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 2 ]
+	[[ $output != *gamma* ]]
+	[[ $output != *"update failed"* ]]
+}
+
 @test "an update with no plugin to list shows TPM's output" {
 	rm -rf "$PLUGIN_DIR/alpha" "$PLUGIN_DIR/beta"
 	run update all

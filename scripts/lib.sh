@@ -608,21 +608,34 @@ tpp_head() {
 
 # tpp_update_heads <all|name...>: prints "name<TAB>head<TAB>spec" for every
 # plugin that TPM's update_plugins with the same arguments acts on, sorted by
-# name: for "all" every declared plugin with a directory, otherwise the named
-# ones. head is the commit checked out, "-" when there is none (no directory,
-# or not a git checkout); spec is the declaration, empty when there is none.
+# name. For "all": every declared plugin whose directory is a git checkout
+# (TPM's update of all plugins skips the others). Otherwise: the named ones,
+# each with head "-" when it has no commit (no directory, or not a git
+# checkout). head is the commit checked out; spec is the first declaration
+# of the plugin, empty when there is none. Unlike tpp_collect it reads no
+# ages: the update needs only the commits.
 tpp_update_heads() {
-	local records names name spec head
-	records=$(tpp_collect_checking)
+	local decls spec _source name names head seen=$'\n' declared=''
+	decls=$(tpp_declarations)
+	while IFS=$'\t' read -r spec _source; do
+		[[ -n $spec ]] || continue
+		name=$(tpp_plugin_name "$spec")
+		[[ $seen == *$'\n'"$name"$'\n'* ]] && continue
+		seen+="$name"$'\n'
+		declared+="$name"$'\t'"$spec"$'\n'
+	done <<<"$decls"
 	if [[ $1 == all ]]; then
-		names=$(awk -F '\t' '$4 != "" && $2 != "not installed" { print $1 }' <<<"$records")
+		names=$(cut -f 1 <<<"$declared" | LC_ALL=C sort)
 	else
 		names=$(for name; do tpp_plugin_name "${name%%#*}"; done | LC_ALL=C sort -u)
 	fi
 	while IFS= read -r name; do
 		[[ -n $name ]] || continue
-		spec=$(awk -F '\t' -v n="$name" '$1 == n { print $4; exit }' <<<"$records")
-		head=$(tpp_head "$TPP_PLUGIN_DIR$name") || head=-
+		if ! head=$(tpp_head "$TPP_PLUGIN_DIR$name"); then
+			[[ $1 == all ]] && continue
+			head=-
+		fi
+		spec=$(awk -F '\t' -v n="$name" '$1 == n { print $2; exit }' <<<"$declared")
 		printf '%s\t%s\t%s\n' "$name" "$head" "$spec"
 	done <<<"$names"
 }
