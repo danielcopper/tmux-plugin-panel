@@ -131,3 +131,18 @@ binding_of() {
 		[ "${#shown}" -eq $((${#longest} + 2)) ]
 	done
 }
+
+@test "panel.sh preview shows TPM's clone URL without its git::@ userinfo" {
+	make_remote alpha
+	clone_plugin alpha
+	declare_plugin someone/alpha
+	git -C "$PLUGIN_DIR/alpha" remote set-url origin https://git::@github.com/someone/alpha
+	run "$TPP_ROOT/scripts/panel.sh" preview alpha
+	[ "$status" -eq 0 ]
+	[[ $output == *"repo      https://github.com/someone/alpha"$'\n'* ]]
+	[[ $output != *git::@* ]]
+	git -C "$PLUGIN_DIR/alpha" remote set-url origin https://someone@example.com/alpha.git
+	run "$TPP_ROOT/scripts/panel.sh" preview alpha
+	[ "$status" -eq 0 ]
+	[[ $output == *"repo      https://someone@example.com/alpha.git"$'\n'* ]]
+}
