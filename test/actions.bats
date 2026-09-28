@@ -9,7 +9,7 @@ setup() {
 }
 
 teardown() {
-	# Processes a failed test left running (see alive below).
+	# Kills the processes a failed test left running (see alive below).
 	if [[ -f ${TEST_ROOT:-}/pids ]]; then
 		local pid
 		while read -r pid; do
@@ -72,7 +72,7 @@ exit 3
 EOF2
 	chmod +x "$TEST_ROOT/fail"
 	write_spin
-	# A spinner left running would make tpp_spin wait for ever: the timeout
+	# A spinner left running would make tpp_spin wait forever: the timeout
 	# turns that into a failure.
 	run timeout 20 "$TEST_ROOT/spin" "$TEST_ROOT/fail" "$TEST_ROOT"
 	[ "$status" -eq 0 ]
@@ -144,7 +144,7 @@ EOF2
 	run ! kill -0 "$spinner"
 }
 
-@test "Ctrl-C stops the command and everything it started, then the spinner" {
+@test "Ctrl-C ends the command and everything it started, then the spinner" {
 	# The command starts two more processes and records all three, itself
 	# last.
 	cat >"$TEST_ROOT/busy" <<'EOF2'
@@ -157,9 +157,9 @@ echo $$ >>"$1/pids"
 wait
 EOF2
 	chmod +x "$TEST_ROOT/busy"
+	write_spin
 	# Started with job control (set -m), so that the shell does not start it
 	# with SIGINT ignored, which the command would inherit.
-	write_spin
 	set -m
 	"$TEST_ROOT/spin" "$TEST_ROOT/busy" "$TEST_ROOT" >"$TEST_ROOT/out" 2>&1 3>&- &
 	local pid=$!

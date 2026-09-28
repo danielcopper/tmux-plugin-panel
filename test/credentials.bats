@@ -22,8 +22,9 @@ export_user_config_entry() {
 }
 
 # store_credential <url>: hands the credentials in <url> to git to store, as
-# git does after a successful pull from a URL with credentials in it; git
-# passes them to every helper that applies to the URL.
+# git does after a successful clone, fetch or pull from a URL with
+# credentials in it; git passes them to every helper that applies to the
+# URL.
 store_credential() {
 	printf 'url=%s\n\n' "$1" | git credential approve
 }

@@ -69,14 +69,18 @@ available.
 | `ctrl-d` / `ctrl-u` | scroll the preview down / up by half a page                                                             |
 | `q` or `esc`        | close the panel                                                                                         |
 
-While TPM installs, updates or cleans, a spinner shows; `ctrl-c` stops TPM.
-A prompt on the terminal, such as ssh asking for a key's passphrase, can be
-answered while the spinner runs.
+While TPM installs, updates or cleans, a spinner shows; `ctrl-c` cancels
+TPM. A prompt on the terminal, such as ssh asking for a key's passphrase, can
+be answered; the spinner pauses while it waits. A prompt that shows what you
+type, such as ssh asking to confirm an unknown host key, can be answered too,
+but the spinner keeps drawing beside it.
 After every change the panel reloads your tmux config and refreshes the list.
 An update ends with one line per plugin: its old and new commit,
-`already up to date`, or `update failed`, and below them TPM's output when an
-update failed. The other actions show TPM's output. Either stays until you
-press a key.
+`already up to date`, or `update failed`. Updating all plugins lists the
+declared plugins installed as git checkouts, the ones TPM updates. TPM's
+output follows when an update failed or TPM reported an error, and replaces
+the list when there was no plugin to update. Install, add and clean show
+TPM's output. Either stays until you press a key.
 
 The preview under the list shows where a plugin is declared, its directory and
 repository, and for an installed plugin the commits an update would bring.
@@ -151,14 +155,14 @@ panel refuses to write when `@tmux-plugin-panel-file` points at your
   plugin's directory.
 - **Status**: the panel's own; it runs `git fetch` and compares with the
   upstream branch using git plumbing commands.
-- **Credential helpers**: TPM clones GitHub plugins from
+- **Credential helpers**: TPM clones a plugin declared as owner/repo from
   `https://git::@github.com/owner/repo`, with empty credentials in the URL,
   which git would otherwise hand to your credential helper to store after
-  every pull. Every git command the panel starts, its own and those of TPM's
-  scripts, runs without credential helpers for that URL form only (an empty
-  `credential.https://git@github.com.helper`, added to the environment
-  through `GIT_CONFIG_COUNT`, which needs git 2.31). Other users and hosts
-  keep your helpers.
+  every successful clone, fetch or pull. Every git command the panel starts,
+  its own and those of TPM's scripts, runs without credential helpers for
+  that URL form only (an empty `credential.https://git@github.com.helper`,
+  added to the environment through `GIT_CONFIG_COUNT`, which needs git
+  2.31). Other users and hosts keep your helpers.
 
 ## Limitations
 

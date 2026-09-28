@@ -168,20 +168,23 @@ tpp_declared_outside_panel_file() {
 	return 1
 }
 
-# The URL form TPM clones GitHub plugins from, https://git::@github.com/...,
-# as a credential.<url> pattern: user "git" at github.com over https.
+# TPM's GitHub URLs as a credential.<url> pattern: TPM clones a plugin
+# declared as owner/repo from https://git::@github.com/owner/repo, user "git"
+# with an empty password at github.com over https.
 TPP_TPM_CREDENTIAL_URL=https://git@github.com
 
-# Runs every git process started from here on, the panel's own and those of
-# TPM's scripts, without credential helpers for TPM's GitHub URLs: an empty
-# credential.<url>.helper clears the list of helpers for the URLs it matches.
-# TPM clones GitHub plugins from https://git::@github.com/owner/repo, and after
-# a pull git hands those empty credentials to the user's helpers to store;
-# some (libsecret, KWallet) print an error for them. Other users and hosts
-# keep their helpers. The setting is appended to the entries already in
-# GIT_CONFIG_COUNT, and added once. GIT_CONFIG_COUNT needs git 2.31; older
-# git ignores it. A GIT_CONFIG_COUNT that is not a number is left alone, git
-# refuses to run with it anyway.
+# Makes every git process started from here on, the panel's own and those of
+# TPM's scripts, run without credential helpers for TPM's GitHub URLs: an
+# empty credential.<url>.helper for TPP_TPM_CREDENTIAL_URL clears the list of
+# helpers for the URLs it matches. After every successful clone, fetch or
+# pull, git hands the empty credentials in those URLs to the user's helpers
+# to store; some (libsecret, KWallet) print an error for them. Other users
+# and hosts keep their helpers. The setting is appended to the entries
+# already in GIT_CONFIG_COUNT, and not added again when it is already the
+# last entry, as it is when a subcommand inherits the environment of the
+# list. GIT_CONFIG_COUNT needs git 2.31; older git ignores it. A
+# GIT_CONFIG_COUNT that is not a number is left alone, git refuses to run
+# with it anyway.
 tpp_disable_credential_helpers() {
 	local count=${GIT_CONFIG_COUNT:-0} key value setting="credential.$TPP_TPM_CREDENTIAL_URL.helper"
 	[[ $count =~ ^[0-9]+$ ]] || return 0
@@ -650,7 +653,7 @@ tpp_update_heads() {
 #                         when TPM exited with a <status> other than 0 and
 #                         its HEAD did not move.
 # TPM's whole output follows when an update failed, when TPM exited with
-# another status than 0, or when there is no plugin to list.
+# a status other than 0, or when there is no plugin to list.
 tpp_update_summary() {
 	local heads=$1 log=$2 rc=$3 name old spec new dir label result failed=0 width=0 i pad
 	local -a labels widths results
@@ -769,8 +772,9 @@ tpp_spinner() {
 # passphrase) can read the answer, and Ctrl-C reaches the command's group
 # only. The child shell is needed because bash, with job control on, answers
 # a foreground job killed by Ctrl-C by interrupting itself. Whatever is left
-# in the group afterwards (TPM's background jobs ignore SIGINT) is stopped
-# with SIGTERM.
+# in the group afterwards (TPM's background jobs ignore SIGINT) is sent
+# SIGTERM, then SIGCONT so that a member stopped by job control (for example
+# by SIGTTIN) wakes up and receives it.
 tpp_spin() {
 	# The owner is taken here: the words of a background command are expanded
 	# in the forked child, where $BASHPID would be the spinner's own pid.

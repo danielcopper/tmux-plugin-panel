@@ -78,7 +78,8 @@ run_tpm() {
 
 # Updates through TPM, and instead of TPM's output, in which the plugins
 # updated in parallel interleave, prints one line per plugin from the commits
-# before and after (see tpp_update_summary).
+# before and after, with TPM's output only when something failed (see
+# tpp_update_summary).
 cmd_update() {
 	local heads log count noun=plugins rc
 	if (($# == 0)); then

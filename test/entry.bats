@@ -222,8 +222,8 @@ EOF
 }
 
 @test "the panel shows fzf's info line, where fzf's spinner runs while the list loads" {
-	# The fake fzf from the test above. fzf 0.36 animates its spinner only in
-	# the default info style; inline shows a static marker.
+	# The same fake fzf as in the test above. fzf 0.36 animates its spinner
+	# only in the default info style; inline shows a static marker.
 	cat >"$TEST_ROOT/bin/fzf" <<EOF2
 #!/usr/bin/env bash
 [[ \$1 == --version ]] && { echo "999.0.0 (fake)"; exit 0; }
