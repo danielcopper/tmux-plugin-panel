@@ -639,3 +639,33 @@ tpp_preview() {
 		printf '\nno pending commits\n'
 	fi
 }
+
+TPP_SPINNER_FRAMES=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+
+# tpp_spin <message> <log> <command> [<arg>...]: runs <command> with its
+# output (stdout and stderr) in the file <log> and stdin from /dev/null, and
+# shows "<message> ⠋" with a turning spinner until it exits; then clears the
+# line. Returns the command's exit status. The command runs in a process
+# group of its own, so that Ctrl-C (or SIGTERM, SIGHUP) stops it and every
+# process it started, and then returns 130.
+tpp_spin() {
+	local message=$1 log=$2 pid rc i=0 stop=0 monitor=0
+	shift 2
+	[[ $- == *m* ]] && monitor=1
+	set -m
+	"$@" </dev/null >"$log" 2>&1 &
+	pid=$!
+	((monitor)) || set +m
+	trap 'stop=1' INT TERM HUP
+	while ((!stop)) && kill -0 "$pid" 2>/dev/null; do
+		printf '\r%s %s' "$message" "${TPP_SPINNER_FRAMES[i++ % ${#TPP_SPINNER_FRAMES[@]}]}"
+		sleep 0.1
+	done
+	((stop)) && kill -TERM -- "-$pid" 2>/dev/null
+	wait "$pid"
+	rc=$?
+	trap - INT TERM HUP
+	printf '\r\033[K'
+	((stop)) && return 130
+	return "$rc"
+}

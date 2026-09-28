@@ -62,21 +62,41 @@ warn_if_not_sourced() {
 	printf "Add this line before \"run '…/tpm/tpm'\":  source-file %s\n" "$TPP_PANEL_FILE"
 }
 
+# run_tpm <message> <script> [<arg>...]: runs one of TPM's scripts behind the
+# spinner, then prints what it printed.
+run_tpm() {
+	local message=$1 log rc
+	shift
+	log=$(mktemp) || return 1
+	tpp_spin "$message" "$log" "$@"
+	rc=$?
+	cat "$log"
+	rm -f "$log"
+	((rc == 130)) && printf 'Interrupted.\n'
+	return "$rc"
+}
+
 cmd_update() {
+	local message
 	if (($# == 0)); then
 		return 0
 	fi
 	clear_screen
-	printf 'Updating: %s\n\n' "$*"
-	"$TPP_TPM_DIR/bin/update_plugins" "$@"
+	if [[ $1 == all ]]; then
+		message='Updating all plugins'
+	elif (($# == 1)); then
+		message='Updating 1 plugin'
+	else
+		message="Updating $# plugins"
+	fi
+	run_tpm "$message" "$TPP_TPM_DIR/bin/update_plugins" "$@"
 	reload_tmux_config
 	pause
 }
 
 cmd_install() {
 	clear_screen
-	printf 'Installing missing plugins\n\n'
-	"$TPP_TPM_DIR/bin/install_plugins"
+	run_tpm 'Installing missing plugins' "$TPP_TPM_DIR/bin/install_plugins"
 	reload_tmux_config
 	pause
 }
@@ -91,7 +111,7 @@ cmd_clean() {
 	fi
 	printf 'Directories without a declaration:\n%s\n\n' "$undeclared"
 	if confirm "Let TPM remove them?"; then
-		"$TPP_TPM_DIR/bin/clean_plugins"
+		run_tpm 'Cleaning' "$TPP_TPM_DIR/bin/clean_plugins"
 		reload_tmux_config
 	fi
 	pause

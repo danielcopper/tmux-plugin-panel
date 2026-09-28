@@ -69,6 +69,7 @@ available.
 | `ctrl-d` / `ctrl-u` | scroll the preview down / up by half a page                                                             |
 | `q` or `esc`        | close the panel                                                                                         |
 
+While TPM installs, updates or cleans, a spinner shows; `ctrl-c` stops TPM.
 After every change the panel reloads your tmux config and refreshes the list.
 The output of TPM is shown until you press a key.
 
