@@ -327,22 +327,54 @@ tpp_status_color() {
 	esac
 }
 
-# Turns records from tpp_collect into fzf rows: "name<TAB>display".
+# tpp_github_path <url>: for a GitHub URL in any common form, prints the
+# path after the host without a trailing slash or ".git" (owner/repo for a
+# well-formed URL); false for any other input.
+tpp_github_path() {
+	local path
+	case $1 in
+	https://github.com/* | http://github.com/* | https://www.github.com/* | git://github.com/* | \
+		ssh://git@github.com/* | git@github.com:* | github.com/*) ;;
+	*) return 1 ;;
+	esac
+	path=${1#*github.com}
+	path=${path#[:/]}
+	path=${path%/}
+	printf '%s\n' "${path%.git}"
+}
+
+# tpp_display_name <spec>: the name the list shows for a declaration: the
+# spec without its "#branch", with a GitHub URL shortened to owner/repo.
+# Other URLs are shown as declared.
+tpp_display_name() {
+	local spec=${1%%#*} path
+	if path=$(tpp_github_path "$spec") && [[ $path =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+		spec=$path
+	fi
+	printf '%s\n' "$spec"
+}
+
+# Turns records from tpp_collect into fzf rows: "name<TAB>display". The
+# display starts with the declaration's tpp_display_name, or the directory
+# name for a directory without a declaration.
 tpp_format_rows() {
-	local -a names statuses ages
-	local name status age _spec _source width=10 i pad
-	while IFS=$'\t' read -r name status age _spec _source; do
+	local -a names shown statuses ages
+	local name status age spec _source label width=10 i pad
+	while IFS=$'\t' read -r name status age spec _source; do
 		[[ -n $name ]] || continue
+		label=$name
+		[[ -n $spec ]] && label=$(tpp_display_name "$spec")
 		names+=("$name")
+		shown+=("$label")
 		statuses+=("$status")
 		ages+=("$age")
-		((${#name} > width)) && width=${#name}
+		((${#label} > width)) && width=${#label}
 	done
 	for i in "${!names[@]}"; do
-		name=${names[i]}
+		label=${shown[i]}
 		status=${statuses[i]}
-		printf -v pad '%*s' $((width - ${#name} + 2)) ''
-		printf '%s\t%s%s%s' "$name" "$name" "$pad" "$(tpp_status_color "$status")"
+		printf -v pad '%*s' $((width - ${#label} + 2)) ''
+		printf '%s\t%s%s%s' "${names[i]}" "$label" "$pad" "$(tpp_status_color "$status")"
 		printf -v pad '%*s' $((16 - ${#status})) ''
 		printf '%s\033[0m%s\033[2m%s\033[0m\n' "$status" "$pad" "${ages[i]}"
 	done
@@ -352,7 +384,7 @@ tpp_format_rows() {
 # common form become "owner/repo"; other git URLs are kept as they are.
 # An optional "#branch" suffix is carried over.
 tpp_normalize_spec() {
-	local input=$1 url branch='' path spec
+	local input=$1 url branch='' spec
 	input="${input#"${input%%[![:space:]]*}"}"
 	input="${input%"${input##*[![:space:]]}"}"
 	if [[ -z $input ]]; then
@@ -371,30 +403,20 @@ tpp_normalize_spec() {
 			return 1
 		fi
 	fi
-	case $url in
-	https://github.com/* | http://github.com/* | https://www.github.com/* | git://github.com/* | \
-		ssh://git@github.com/* | git@github.com:* | github.com/*)
-		path=${url#*github.com}
-		path=${path#[:/]}
-		path=${path%/}
-		path=${path%.git}
-		spec=$path
+	if spec=$(tpp_github_path "$url"); then
 		if [[ ! $spec =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
 			tpp_err "invalid GitHub URL '$url': expected github.com/owner/repo"
 			return 1
 		fi
-		;;
-	*://* | *@*:*)
+	elif [[ $url == *://* || $url == *@*:* ]]; then
 		spec=${url%/}
-		;;
-	*)
+	else
 		spec=${url%.git}
 		if [[ ! $spec =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
 			tpp_err "invalid plugin '$url': expected owner/repo or a git URL"
 			return 1
 		fi
-		;;
-	esac
+	fi
 	case $(tpp_plugin_name "$spec") in
 	"" | . | ..)
 		tpp_err "invalid plugin '$url': no repository name"

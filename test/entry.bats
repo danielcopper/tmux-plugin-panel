@@ -59,8 +59,8 @@ binding_of() {
 	run "$TPP_ROOT/scripts/panel.sh" rows --fetch
 	[ "$status" -eq 0 ]
 	[ "${#lines[@]}" -eq 2 ]
-	[[ ${lines[0]} == alpha$'\t'alpha*✓* ]]
-	[[ ${lines[1]} == missing$'\t'missing*"not installed"* ]]
+	[[ ${lines[0]} == alpha$'\t'"$(remote_url alpha) "*✓* ]]
+	[[ ${lines[1]} == missing$'\t'"someone/missing "*"not installed"* ]]
 }
 
 @test "rows keep their columns when a record has no age" {
@@ -70,9 +70,8 @@ binding_of() {
 	declare_plugin "someone/missing"
 	run bash -c 'source "$1/scripts/lib.sh"; tpp_init; tpp_collect_checking | tpp_format_rows' _ "$TPP_ROOT"
 	[ "$status" -eq 0 ]
-	[[ $output != *file://* ]]
-	[[ $output != *someone/missing* ]]
-	[[ ${lines[1]} == missing$'\t'missing*"not installed"*-* ]]
+	[[ $output != *"$PANEL_FILE"* ]]
+	[[ ${lines[1]} == missing$'\t'"someone/missing "*"not installed"*$'\033[2m-\033[0m' ]]
 }
 
 @test "panel.sh preview lists pending commits" {
@@ -93,4 +92,42 @@ binding_of() {
 	[ "$status" -eq 0 ]
 	[[ $output == *"repo      https://github.com/someone/missing"* ]]
 	[[ $output == *"not installed"* ]]
+}
+
+@test "a declaration is shown as owner/repo, other URLs as declared, without #branch" {
+	# shellcheck source=scripts/lib.sh
+	source "$TPP_ROOT/scripts/lib.sh"
+	[ "$(tpp_display_name someone/alpha)" = someone/alpha ]
+	[ "$(tpp_display_name someone/alpha#dev)" = someone/alpha ]
+	[ "$(tpp_display_name https://github.com/someone/alpha)" = someone/alpha ]
+	[ "$(tpp_display_name https://github.com/someone/alpha.git#v1.0)" = someone/alpha ]
+	[ "$(tpp_display_name git@github.com:someone/alpha.git)" = someone/alpha ]
+	[ "$(tpp_display_name https://gitlab.com/someone/alpha.git)" = https://gitlab.com/someone/alpha.git ]
+	[ "$(tpp_display_name https://gitlab.com/someone/alpha.git#dev)" = https://gitlab.com/someone/alpha.git ]
+	[ "$(tpp_display_name git@gitlab.com:someone/alpha.git)" = git@gitlab.com:someone/alpha.git ]
+}
+
+@test "rows show the declared name, keyed by directory, in one aligned column" {
+	declare_plugin tmux-plugins/tpm
+	declare_plugin someone/alpha
+	declare_plugin "someone/beta#dev"
+	declare_plugin https://github.com/someone/gamma.git
+	declare_plugin "https://gitlab.com/someone/delta.git#dev"
+	mkdir -p "$PLUGIN_DIR/orphan"
+	run "$TPP_ROOT/scripts/panel.sh" rows
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 6 ]
+	[[ ${lines[0]} == alpha$'\t'"someone/alpha "*"not installed"* ]]
+	[[ ${lines[1]} == beta$'\t'"someone/beta "*"not installed"* ]]
+	[[ ${lines[2]} == delta$'\t'"https://gitlab.com/someone/delta.git "*"not installed"* ]]
+	[[ ${lines[3]} == gamma$'\t'"someone/gamma "*"not installed"* ]]
+	[[ ${lines[4]} == orphan$'\t'"orphan "*"not declared"* ]]
+	[[ ${lines[5]} == tpm$'\t'"tmux-plugins/tpm "* ]]
+	# The status column starts two columns after the longest name.
+	local line shown longest=https://gitlab.com/someone/delta.git
+	for line in "${lines[@]}"; do
+		shown=${line#*$'\t'}
+		shown=${shown%%$'\033'*}
+		[ "${#shown}" -eq $((${#longest} + 2)) ]
+	done
 }
