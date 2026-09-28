@@ -21,24 +21,43 @@ export_user_config_entry() {
 	export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=tpp.kept GIT_CONFIG_VALUE_0=yes
 }
 
-# Hands a credential to git to store, as git does after a successful pull
-# from a URL with credentials in it; git passes it to every helper.
+# store_credential <url>: hands the credentials in <url> to git to store, as
+# git does after a successful pull from a URL with credentials in it; git
+# passes them to every helper that applies to the URL.
 store_credential() {
-	printf 'protocol=https\nhost=example.com\nusername=git\npassword=\n\n' | git credential approve
+	printf 'url=%s\n\n' "$1" | git credential approve
 }
 
-@test "without the panel's git environment the test helper is called" {
-	store_credential
+# helper_calls: the number of times the test helper was called.
+helper_calls() {
+	if [[ -e $HELPER_LOG ]]; then
+		grep -c . "$HELPER_LOG"
+	else
+		echo 0
+	fi
+}
+
+@test "without the panel's git environment the test helper is called for TPM's GitHub URLs" {
+	store_credential https://git::@github.com/someone/alpha
 	[ "$(cat "$HELPER_LOG")" = store ]
 }
 
-@test "git run with the panel's git environment calls no credential helper" {
+@test "git run with the panel's git environment calls no credential helper for TPM's GitHub URLs" {
 	load_lib
 	tpp_disable_credential_helpers
 	[ "$GIT_CONFIG_COUNT" = 1 ]
-	[ "$(git config --get credential.helper)" = "" ]
-	store_credential
-	[ ! -e "$HELPER_LOG" ]
+	[ "$(git config --get-urlmatch credential.helper https://git@github.com/someone/alpha)" = "" ]
+	store_credential https://git::@github.com/someone/alpha
+	[ "$(helper_calls)" -eq 0 ]
+}
+
+@test "other GitHub users and other hosts keep their credential helper" {
+	load_lib
+	tpp_disable_credential_helpers
+	store_credential https://someone:secret@github.com/someone/alpha
+	[ "$(helper_calls)" -eq 1 ]
+	store_credential https://git::@example.com/someone/alpha
+	[ "$(helper_calls)" -eq 2 ]
 }
 
 @test "the panel's git environment keeps the entries already in GIT_CONFIG_COUNT" {
@@ -47,9 +66,8 @@ store_credential() {
 	tpp_disable_credential_helpers
 	[ "$GIT_CONFIG_COUNT" = 2 ]
 	[ "$(git config --get tpp.kept)" = yes ]
-	[ "$(git config --get credential.helper)" = "" ]
-	store_credential
-	[ ! -e "$HELPER_LOG" ]
+	store_credential https://git::@github.com/someone/alpha
+	[ "$(helper_calls)" -eq 0 ]
 }
 
 @test "the panel's git environment is added once" {
@@ -60,11 +78,11 @@ store_credential() {
 	[ -z "${GIT_CONFIG_KEY_1+set}" ]
 }
 
-@test "TPM's scripts run by the panel call no credential helper" {
+@test "TPM's scripts run by the panel call no credential helper for TPM's GitHub URLs" {
 	# TPM's install, replaced by one that stores a credential.
 	cat >"$PLUGIN_DIR/tpm/bin/install_plugins" <<'EOF'
 #!/usr/bin/env bash
-printf 'protocol=https\nhost=example.com\nusername=git\npassword=\n\n' | git credential approve
+printf 'url=https://git::@github.com/someone/alpha\n\n' | git credential approve
 echo "stored"
 EOF
 	"$PLUGIN_DIR/tpm/bin/install_plugins"
