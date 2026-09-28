@@ -150,7 +150,8 @@ cmd_remove() {
 header() {
 	local plugin_dir=${TPP_PLUGIN_DIR/#$HOME/\~} panel_file=${TPP_PANEL_FILE/#$HOME/\~}
 	printf 'plugins %s   file %s\n' "$plugin_dir" "$panel_file"
-	printf 'enter/u update · U all · a add · d remove · i install · c clean · r refresh · tab mark · q quit'
+	printf 'enter/u update · U all · a add · d remove · i install · c clean · r refresh · tab mark · q quit\n'
+	printf 'j/k move · J/K scroll preview · ctrl-d/ctrl-u scroll preview by half a page'
 	if ! tpp_panel_file_sourced; then
 		printf '\n\033[33m%s is not sourced from %s\033[0m' "$panel_file" "${TPP_USER_CONF/#$HOME/\~}"
 	fi
@@ -161,11 +162,17 @@ run_ui() {
 	self=$(printf '%q' "$SELF")
 	tpp_collect_checking | tpp_format_rows |
 		fzf --multi --ansi --no-sort --layout=reverse --disabled \
-			--delimiter $'\t' --with-nth 2.. \
+			--delimiter $'\t' --with-nth 2.. --header-lines 1 \
 			--prompt '' --info hidden --header "$(header)" \
 			--preview "$self preview {1}" --preview-window 'down,50%,wrap' \
 			--bind "load:reload-sync($self rows --fetch)+unbind(load)" \
 			--bind 'change:clear-query' \
+			--bind 'j:down' \
+			--bind 'k:up' \
+			--bind 'J:preview-down' \
+			--bind 'K:preview-up' \
+			--bind 'ctrl-d:preview-half-page-down' \
+			--bind 'ctrl-u:preview-half-page-up' \
 			--bind "enter:execute($self update {+1})+reload-sync($self rows)" \
 			--bind "u:execute($self update {+1})+reload-sync($self rows)" \
 			--bind "U:execute($self update all)+reload-sync($self rows)" \

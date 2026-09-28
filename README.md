@@ -52,17 +52,20 @@ When it opens, the panel fetches every installed plugin in parallel and shows
 Each fetch is cut off after 10 seconds when `timeout` or `gtimeout` is
 available.
 
-| Key            | Action                                                                                                  |
-| -------------- | ------------------------------------------------------------------------------------------------------- |
-| `enter` or `u` | update the selected plugins                                                                             |
-| `tab`          | mark a plugin, to act on several at once                                                                |
-| `U`            | update all plugins                                                                                      |
-| `a`            | add a plugin                                                                                            |
-| `d`            | remove the selected plugins                                                                             |
-| `i`            | install missing plugins                                                                                 |
-| `c`            | offers to clean: lists the directories without a declaration and lets TPM remove them (see Limitations) |
-| `r`            | fetch again and refresh the list                                                                        |
-| `q` or `esc`   | close the panel                                                                                         |
+| Key                 | Action                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `enter` or `u`      | update the selected plugins                                                                             |
+| `tab`               | mark a plugin, to act on several at once                                                                |
+| `U`                 | update all plugins                                                                                      |
+| `a`                 | add a plugin                                                                                            |
+| `d`                 | remove the selected plugins                                                                             |
+| `i`                 | install missing plugins                                                                                 |
+| `c`                 | offers to clean: lists the directories without a declaration and lets TPM remove them (see Limitations) |
+| `r`                 | fetch again and refresh the list                                                                        |
+| `j` / `k`           | move the selection down / up                                                                            |
+| `J` / `K`           | scroll the preview down / up by a line                                                                  |
+| `ctrl-d` / `ctrl-u` | scroll the preview down / up by half a page                                                             |
+| `q` or `esc`        | close the panel                                                                                         |
 
 After every change the panel reloads your tmux config and refreshes the list.
 The output of TPM is shown until you press a key.
@@ -84,7 +87,7 @@ repository, and for an installed plugin the commits an update would bring.
 | `no upstream`    | the checked-out branch does not track a remote branch                                                    |
 | `not a git repo` | the plugin directory is not a git checkout                                                               |
 
-The last column is the age of the plugin's current commit.
+The last column, `installed commit`, is the age of the plugin's current commit.
 
 ### Adding a plugin
 

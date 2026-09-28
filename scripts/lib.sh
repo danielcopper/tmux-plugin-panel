@@ -327,23 +327,83 @@ tpp_status_color() {
 	esac
 }
 
-# Turns records from tpp_collect into fzf rows: "name<TAB>display".
+# tpp_github_path <url>: for a GitHub URL in any common form, prints the
+# path after the host without a trailing slash or ".git" (owner/repo for a
+# well-formed URL); false for any other input.
+tpp_github_path() {
+	local path
+	case $1 in
+	https://github.com/* | http://github.com/* | https://www.github.com/* | git://github.com/* | \
+		ssh://git@github.com/* | git@github.com:* | github.com/*) ;;
+	*) return 1 ;;
+	esac
+	path=${1#*github.com}
+	path=${path#[:/]}
+	path=${path%/}
+	printf '%s\n' "${path%.git}"
+}
+
+# tpp_display_name <spec>: the name the list shows for a declaration: the
+# spec without its "#branch", with a GitHub URL shortened to owner/repo.
+# Other URLs are shown as declared.
+tpp_display_name() {
+	local spec=${1%%#*} path
+	if path=$(tpp_github_path "$spec") && [[ $path =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+		spec=$path
+	fi
+	printf '%s\n' "$spec"
+}
+
+# tpp_label <name> <spec>: the name the list and the preview show for the
+# plugin in directory <name>: tpp_display_name of its declaration, or <name>
+# itself when there is no declaration (empty <spec>).
+tpp_label() {
+	if [[ -n $2 ]]; then
+		tpp_display_name "$2"
+	else
+		printf '%s\n' "$1"
+	fi
+}
+
+# tpp_style_label <label> <spec>: <label> from tpp_label with ANSI styles:
+# owner/repo with "owner/" dim and "repo" bold; the directory name of a
+# plugin without a declaration (empty <spec>) bold; any other URL plain.
+tpp_style_label() {
+	local label=$1
+	if [[ -z $2 ]]; then
+		printf '\033[1m%s\033[0m\n' "$label"
+	elif [[ $label =~ ^([A-Za-z0-9_.-]+/)([A-Za-z0-9_.-]+)$ ]]; then
+		printf '\033[2m%s\033[0m\033[1m%s\033[0m\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+	else
+		printf '%s\n' "$label"
+	fi
+}
+
+# Turns records from tpp_collect into fzf rows: "name<TAB>display". The
+# display starts with the styled tpp_label; the column is padded to the
+# widest label as shown, without its escape codes. The first line is the
+# dim column header, with the same widths and an empty name; the panel runs
+# fzf with --header-lines=1, so it is shown above the rows and cannot be
+# selected.
 tpp_format_rows() {
-	local -a names statuses ages
-	local name status age _spec _source width=10 i pad
-	while IFS=$'\t' read -r name status age _spec _source; do
+	local -a names labels label_widths statuses ages
+	local name status age spec _source label width=10 status_width=16 i pad
+	while IFS=$'\t' read -r name status age spec _source; do
 		[[ -n $name ]] || continue
+		label=$(tpp_label "$name" "$spec")
 		names+=("$name")
+		labels+=("$(tpp_style_label "$label" "$spec")")
+		label_widths+=("${#label}")
 		statuses+=("$status")
 		ages+=("$age")
-		((${#name} > width)) && width=${#name}
+		((${#label} > width)) && width=${#label}
 	done
+	printf '\t\033[2m%-*s%-*s%s\033[0m\n' $((width + 2)) plugin "$status_width" status "installed commit"
 	for i in "${!names[@]}"; do
-		name=${names[i]}
 		status=${statuses[i]}
-		printf -v pad '%*s' $((width - ${#name} + 2)) ''
-		printf '%s\t%s%s%s' "$name" "$name" "$pad" "$(tpp_status_color "$status")"
-		printf -v pad '%*s' $((16 - ${#status})) ''
+		printf -v pad '%*s' $((width - label_widths[i] + 2)) ''
+		printf '%s\t%s%s%s' "${names[i]}" "${labels[i]}" "$pad" "$(tpp_status_color "$status")"
+		printf -v pad '%*s' $((status_width - ${#status})) ''
 		printf '%s\033[0m%s\033[2m%s\033[0m\n' "$status" "$pad" "${ages[i]}"
 	done
 }
@@ -352,7 +412,7 @@ tpp_format_rows() {
 # common form become "owner/repo"; other git URLs are kept as they are.
 # An optional "#branch" suffix is carried over.
 tpp_normalize_spec() {
-	local input=$1 url branch='' path spec
+	local input=$1 url branch='' spec
 	input="${input#"${input%%[![:space:]]*}"}"
 	input="${input%"${input##*[![:space:]]}"}"
 	if [[ -z $input ]]; then
@@ -371,30 +431,20 @@ tpp_normalize_spec() {
 			return 1
 		fi
 	fi
-	case $url in
-	https://github.com/* | http://github.com/* | https://www.github.com/* | git://github.com/* | \
-		ssh://git@github.com/* | git@github.com:* | github.com/*)
-		path=${url#*github.com}
-		path=${path#[:/]}
-		path=${path%/}
-		path=${path%.git}
-		spec=$path
+	if spec=$(tpp_github_path "$url"); then
 		if [[ ! $spec =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
 			tpp_err "invalid GitHub URL '$url': expected github.com/owner/repo"
 			return 1
 		fi
-		;;
-	*://* | *@*:*)
+	elif [[ $url == *://* || $url == *@*:* ]]; then
 		spec=${url%/}
-		;;
-	*)
+	else
 		spec=${url%.git}
 		if [[ ! $spec =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
 			tpp_err "invalid plugin '$url': expected owner/repo or a git URL"
 			return 1
 		fi
-		;;
-	esac
+	fi
 	case $(tpp_plugin_name "$spec") in
 	"" | . | ..)
 		tpp_err "invalid plugin '$url': no repository name"
@@ -529,7 +579,7 @@ tpp_preview() {
 		spec=${decl%%$'\t'*}
 		source=${decl#*$'\t'}
 	fi
-	printf '%s\n\n' "$name"
+	printf '%s\n\n' "$(tpp_style_label "$(tpp_label "$name" "$spec")" "$spec")"
 	if [[ -n $spec ]]; then
 		printf 'declared  %s\n' "$spec"
 		printf 'in        %s\n' "$source"
@@ -549,6 +599,11 @@ tpp_preview() {
 		return
 	fi
 	url=$(tpp_git "$dir" remote get-url origin 2>/dev/null)
+	# TPM clones an owner/repo declaration from
+	# https://git::@github.com/owner/repo, with credentials in the URL so
+	# git does not prompt for any; the preview shows it without "git::@".
+	# Any other URL is shown as it is.
+	url=${url/#https:\/\/git::@github.com\//https://github.com/}
 	printf 'repo      %s\n' "${url:-(no origin)}"
 	if ! tpp_git "$dir" rev-parse -q --verify '@{u}' >/dev/null; then
 		printf '\nno upstream branch\n'

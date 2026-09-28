@@ -2,6 +2,9 @@
 
 bats_require_minimum_version 1.5.0
 
+# The styles of a name in the list and the preview title.
+DIM=$'\033[2m' BOLD=$'\033[1m' RESET=$'\033[0m'
+
 setup() {
 	load test_helper
 	tpp_setup
@@ -58,9 +61,10 @@ binding_of() {
 	declare_plugin "someone/missing"
 	run "$TPP_ROOT/scripts/panel.sh" rows --fetch
 	[ "$status" -eq 0 ]
-	[ "${#lines[@]}" -eq 2 ]
-	[[ ${lines[0]} == alpha$'\t'alpha*✓* ]]
-	[[ ${lines[1]} == missing$'\t'missing*"not installed"* ]]
+	[ "${#lines[@]}" -eq 3 ]
+	[[ ${lines[0]} == $'\t'"${DIM}plugin "*"status "*"installed commit${RESET}" ]]
+	[[ ${lines[1]} == alpha$'\t'"$(remote_url alpha) "*✓* ]]
+	[[ ${lines[2]} == missing$'\t'"${DIM}someone/${RESET}${BOLD}missing${RESET} "*"not installed"* ]]
 }
 
 @test "rows keep their columns when a record has no age" {
@@ -70,9 +74,8 @@ binding_of() {
 	declare_plugin "someone/missing"
 	run bash -c 'source "$1/scripts/lib.sh"; tpp_init; tpp_collect_checking | tpp_format_rows' _ "$TPP_ROOT"
 	[ "$status" -eq 0 ]
-	[[ $output != *file://* ]]
-	[[ $output != *someone/missing* ]]
-	[[ ${lines[1]} == missing$'\t'missing*"not installed"*-* ]]
+	[[ $output != *"$PANEL_FILE"* ]]
+	[[ ${lines[2]} == missing$'\t'"${DIM}someone/${RESET}${BOLD}missing${RESET} "*"not installed"*$'\033[2m-\033[0m' ]]
 }
 
 @test "panel.sh preview lists pending commits" {
@@ -93,4 +96,125 @@ binding_of() {
 	[ "$status" -eq 0 ]
 	[[ $output == *"repo      https://github.com/someone/missing"* ]]
 	[[ $output == *"not installed"* ]]
+}
+
+@test "a declaration is shown as owner/repo, other URLs as declared, without #branch" {
+	# shellcheck source=scripts/lib.sh
+	source "$TPP_ROOT/scripts/lib.sh"
+	[ "$(tpp_display_name someone/alpha)" = someone/alpha ]
+	[ "$(tpp_display_name someone/alpha#dev)" = someone/alpha ]
+	[ "$(tpp_display_name https://github.com/someone/alpha)" = someone/alpha ]
+	[ "$(tpp_display_name https://github.com/someone/alpha.git#v1.0)" = someone/alpha ]
+	[ "$(tpp_display_name git@github.com:someone/alpha.git)" = someone/alpha ]
+	[ "$(tpp_display_name https://gitlab.com/someone/alpha.git)" = https://gitlab.com/someone/alpha.git ]
+	[ "$(tpp_display_name https://gitlab.com/someone/alpha.git#dev)" = https://gitlab.com/someone/alpha.git ]
+	[ "$(tpp_display_name git@gitlab.com:someone/alpha.git)" = git@gitlab.com:someone/alpha.git ]
+}
+
+@test "rows show the declared name, keyed by directory, in one aligned column" {
+	declare_plugin tmux-plugins/tpm
+	declare_plugin someone/alpha
+	declare_plugin "someone/beta#dev"
+	declare_plugin https://github.com/someone/gamma.git
+	declare_plugin "https://gitlab.com/someone/delta.git#dev"
+	mkdir -p "$PLUGIN_DIR/orphan"
+	run "$TPP_ROOT/scripts/panel.sh" rows
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 7 ]
+	# owner/repo: the owner dim, the repo bold; a directory without a
+	# declaration: bold; any other URL: plain.
+	[[ ${lines[1]} == alpha$'\t'"${DIM}someone/${RESET}${BOLD}alpha${RESET} "*"not installed"* ]]
+	[[ ${lines[2]} == beta$'\t'"${DIM}someone/${RESET}${BOLD}beta${RESET} "*"not installed"* ]]
+	[[ ${lines[3]} == delta$'\t'"https://gitlab.com/someone/delta.git "*"not installed"* ]]
+	[[ ${lines[4]} == gamma$'\t'"${DIM}someone/${RESET}${BOLD}gamma${RESET} "*"not installed"* ]]
+	[[ ${lines[5]} == orphan$'\t'"${BOLD}orphan${RESET} "*"not declared"* ]]
+	[[ ${lines[6]} == tpm$'\t'"${DIM}tmux-plugins/${RESET}${BOLD}tpm${RESET} "* ]]
+	# Without the escapes, the column header and every row start their
+	# status two columns after the longest name, and their last column 16
+	# columns later.
+	local i visible expected longest=https://gitlab.com/someone/delta.git
+	local -a names=(plugin someone/alpha someone/beta "$longest" someone/gamma orphan tmux-plugins/tpm)
+	local -a lasts=("installed commit" - - - - - -)
+	for i in "${!lines[@]}"; do
+		visible=$(printf '%s' "${lines[i]#*$'\t'}" | sed $'s/\033\\[[0-9;]*m//g')
+		printf -v expected '%-*s' $((${#longest} + 2)) "${names[i]}"
+		[ "${visible:0:${#expected}}" = "$expected" ]
+		[[ ${visible:${#expected}:1} != ' ' ]]
+		[ "${visible:${#expected}+16}" = "${lasts[i]}" ]
+	done
+}
+
+@test "rows start with a dim column header without a key, aligned with a long name" {
+	declare_plugin someone/alpha
+	declare_plugin https://gitlab.com/someone/a-plugin-with-a-rather-long-name.git
+	run "$TPP_ROOT/scripts/panel.sh" rows
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 3 ]
+	local pad long=https://gitlab.com/someone/a-plugin-with-a-rather-long-name.git
+	printf -v pad '%*s' $((${#long} + 2 - 6)) ''
+	[ "${lines[0]}" = $'\t'"${DIM}plugin${pad}status          installed commit${RESET}" ]
+}
+
+@test "panel.sh preview is titled with the list's name, styled the same" {
+	declare_plugin "someone/alpha#dev"
+	declare_plugin https://gitlab.com/someone/beta.git
+	mkdir -p "$PLUGIN_DIR/orphan"
+	run "$TPP_ROOT/scripts/panel.sh" preview alpha
+	[ "$status" -eq 0 ]
+	[ "${lines[0]}" = "${DIM}someone/${RESET}${BOLD}alpha${RESET}" ]
+	run "$TPP_ROOT/scripts/panel.sh" preview beta
+	[ "$status" -eq 0 ]
+	[ "${lines[0]}" = https://gitlab.com/someone/beta.git ]
+	run "$TPP_ROOT/scripts/panel.sh" preview orphan
+	[ "$status" -eq 0 ]
+	[ "${lines[0]}" = "${BOLD}orphan${RESET}" ]
+}
+
+@test "panel.sh preview shows TPM's clone URL without its git::@ userinfo" {
+	make_remote alpha
+	clone_plugin alpha
+	declare_plugin someone/alpha
+	git -C "$PLUGIN_DIR/alpha" remote set-url origin https://git::@github.com/someone/alpha
+	run "$TPP_ROOT/scripts/panel.sh" preview alpha
+	[ "$status" -eq 0 ]
+	[[ $output == *"repo      https://github.com/someone/alpha"$'\n'* ]]
+	[[ $output != *git::@* ]]
+	git -C "$PLUGIN_DIR/alpha" remote set-url origin https://someone@example.com/alpha.git
+	run "$TPP_ROOT/scripts/panel.sh" preview alpha
+	[ "$status" -eq 0 ]
+	[[ $output == *"repo      https://someone@example.com/alpha.git"$'\n'* ]]
+	git -C "$PLUGIN_DIR/alpha" remote set-url origin https://git::@example.com/x
+	run "$TPP_ROOT/scripts/panel.sh" preview alpha
+	[ "$status" -eq 0 ]
+	[[ $output == *"repo      https://git::@example.com/x"$'\n'* ]]
+}
+
+@test "the panel runs fzf with exactly one header line, so the column header is never an item" {
+	# A fake fzf on PATH, like the tmux shim: answers the version check and
+	# records the arguments of the list's invocation, one per line.
+	cat >"$TEST_ROOT/bin/fzf" <<EOF
+#!/usr/bin/env bash
+[[ \$1 == --version ]] && { echo "0.36.0 (fake)"; exit 0; }
+printf '%s\n' "\$@" >"$TEST_ROOT/fzf-argv"
+cat >/dev/null
+EOF
+	chmod +x "$TEST_ROOT/bin/fzf"
+	run "$TPP_ROOT/scripts/panel.sh"
+	[ "$status" -eq 0 ]
+	local -a argv
+	mapfile -t argv <"$TEST_ROOT/fzf-argv"
+	local i found=0
+	for i in "${!argv[@]}"; do
+		case ${argv[i]} in
+		--header-lines)
+			[ "${argv[i + 1]}" = 1 ]
+			found=$((found + 1))
+			;;
+		--header-lines=*)
+			[ "${argv[i]#*=}" = 1 ]
+			found=$((found + 1))
+			;;
+		esac
+	done
+	[ "$found" -eq 1 ]
 }
