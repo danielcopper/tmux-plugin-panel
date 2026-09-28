@@ -140,6 +140,18 @@ When you change the file, source that file instead of `plugins.conf`. The
 panel refuses to write when `@tmux-plugin-panel-file` points at your
 `tmux.conf`.
 
+## Language
+
+The panel speaks English and German. It takes the language from the first of
+`LC_ALL`, `LC_MESSAGES` and `LANG` that is set and not empty: `de_DE.UTF-8`
+is German. Any other language, `C` and `POSIX` are English.
+
+The age in the last column is git's own wording, asked for in the panel's
+language; git words it in German when it has its German translation and the
+locale is installed. TPM's output, and the git messages in it, are shown as
+TPM prints them. The key names in the header (`enter`, `ctrl-d`, …) stay as
+they are.
+
 ## How it works with TPM
 
 - **Plugin directory**: the same as TPM's: `TMUX_PLUGIN_MANAGER_PATH` from the
@@ -186,12 +198,19 @@ TPM checkout to copy into their temporary setups:
 
 ```sh
 TPM_SRC=~/.config/tmux/plugins/tpm bats test/
-shellcheck -x tmux-plugin-panel.tmux scripts/*.sh test/*.bash test/*.bats
+shellcheck -x tmux-plugin-panel.tmux scripts/*.sh scripts/lang/*.sh test/*.bash test/*.bats
 ```
 
 Every test runs its own tmux server on a private socket with a temporary
 `HOME`, and uses local git repositories as plugin remotes. Your tmux server,
-your plugins and the network are not touched.
+your plugins and the network are not touched. The tests run under the
+`C.UTF-8` locale, so the panel speaks English in them unless a test sets
+another language.
+
+To add a language, copy `scripts/lang/en.sh` to `scripts/lang/<code>.sh`,
+where `<code>` is the language part of the locale (`fr` for `fr_FR.UTF-8`),
+and translate the messages; a test checks that the new file defines every
+message of `en.sh`.
 
 ## License
 
