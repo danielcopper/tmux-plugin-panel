@@ -17,22 +17,28 @@ clear_screen() {
 }
 
 pause() {
-	printf '\n%s' "${1:-Press any key to return to the list.}"
+	printf '\n%s' "${1:-$TPP_MSG_PRESS_KEY_RETURN}"
 	read -rsn1 _ </dev/tty
 	printf '\n'
 }
 
 fail_and_exit() {
 	tpp_err "$1"
-	pause "Press any key to close."
+	pause "$TPP_MSG_PRESS_KEY_CLOSE"
 	exit 1
 }
 
+# confirm <question>: true when the answer is one of TPP_MSG_CONFIRM_YES, in
+# any case.
 confirm() {
-	local answer
-	printf '%s [y/N] ' "$1"
+	local answer word
+	printf '%s %s ' "$1" "$TPP_MSG_CONFIRM_CHOICES"
 	read -r answer </dev/tty
-	[[ $answer == [yY] || $answer == [yY][eE][sS] ]]
+	answer=$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')
+	for word in $TPP_MSG_CONFIRM_YES; do
+		[[ $answer == "$word" ]] && return 0
+	done
+	return 1
 }
 
 check_dependencies() {
@@ -41,25 +47,24 @@ check_dependencies() {
 		command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
 	done
 	if ((${#missing[@]})); then
-		fail_and_exit "missing required command(s): ${missing[*]}"
+		fail_and_exit "$(tpp_msg_missing_commands "${missing[@]}")"
 	fi
 	version=$(fzf --version 2>/dev/null)
 	version=${version%% *}
 	if ! tpp_version_ge "$version" "$TPP_MIN_FZF"; then
-		fail_and_exit "fzf $TPP_MIN_FZF or newer is required (found ${version:-unknown})"
+		fail_and_exit "$(tpp_msg_fzf_too_old "$TPP_MIN_FZF" "${version:-$TPP_MSG_UNKNOWN_VERSION}")"
 	fi
 }
 
 reload_tmux_config() {
 	[[ -f $TPP_USER_CONF ]] || return 0
-	tmux source-file "$TPP_USER_CONF" || tpp_err "reloading $TPP_USER_CONF failed"
+	tmux source-file "$TPP_USER_CONF" || tpp_err "$(tpp_msg_reload_failed "$TPP_USER_CONF")"
 }
 
 warn_if_not_sourced() {
 	tpp_panel_file_sourced && return 0
-	printf '\nNote: %s is not sourced from %s, so TPM does not see its plugins.\n' \
-		"$TPP_PANEL_FILE" "$TPP_USER_CONF"
-	printf "Add this line before \"run '…/tpm/tpm'\":  source-file %s\n" "$TPP_PANEL_FILE"
+	printf '\n%s\n' "$(tpp_msg_note_not_sourced "$TPP_PANEL_FILE" "$TPP_USER_CONF")"
+	printf '%s\n' "$(tpp_msg_add_source_line "$TPP_PANEL_FILE")"
 }
 
 # run_tpm <message> <script> [<arg>...]: runs one of TPM's scripts behind the
@@ -72,7 +77,7 @@ run_tpm() {
 	rc=$?
 	cat "$log"
 	rm -f "$log"
-	((rc == 130)) && printf 'Interrupted.\n'
+	((rc == 130)) && printf '%s\n' "$TPP_MSG_INTERRUPTED"
 	return "$rc"
 }
 
@@ -81,7 +86,7 @@ run_tpm() {
 # before and after, with TPM's output only when something failed (see
 # tpp_update_summary).
 cmd_update() {
-	local heads log count noun=plugins rc
+	local heads log count rc
 	if (($# == 0)); then
 		return 0
 	fi
@@ -93,11 +98,10 @@ cmd_update() {
 	fi
 	tpp_update_heads "$@" >"$heads"
 	count=$(grep -c . "$heads")
-	((count == 1)) && noun=plugin
-	tpp_spin "Updating $count $noun" "$log" "$TPP_TPM_DIR/bin/update_plugins" "$@"
+	tpp_spin "$(tpp_msg_updating "$count")" "$log" "$TPP_TPM_DIR/bin/update_plugins" "$@"
 	rc=$?
 	tpp_update_summary "$heads" "$log" "$rc"
-	((rc == 130)) && printf '\nInterrupted.\n'
+	((rc == 130)) && printf '\n%s\n' "$TPP_MSG_INTERRUPTED"
 	rm -f "$heads" "$log"
 	reload_tmux_config
 	pause
@@ -105,7 +109,7 @@ cmd_update() {
 
 cmd_install() {
 	clear_screen
-	run_tpm 'Installing missing plugins' "$TPP_TPM_DIR/bin/install_plugins"
+	run_tpm "$TPP_MSG_INSTALLING_MISSING" "$TPP_TPM_DIR/bin/install_plugins"
 	reload_tmux_config
 	pause
 }
@@ -115,12 +119,12 @@ cmd_clean() {
 	clear_screen
 	undeclared=$(tpp_collect_checking | awk -F '\t' '$2 == "not declared" { print "  " $1 }')
 	if [[ -z $undeclared ]]; then
-		pause "Nothing to clean. Press any key to return to the list."
+		pause "$TPP_MSG_NOTHING_TO_CLEAN"
 		return
 	fi
-	printf 'Directories without a declaration:\n%s\n\n' "$undeclared"
-	if confirm "Let TPM remove them?"; then
-		run_tpm 'Cleaning' "$TPP_TPM_DIR/bin/clean_plugins"
+	printf '%s\n%s\n\n' "$TPP_MSG_CLEAN_LIST" "$undeclared"
+	if confirm "$TPP_MSG_CLEAN_CONFIRM"; then
+		run_tpm "$TPP_MSG_CLEANING" "$TPP_TPM_DIR/bin/clean_plugins"
 		reload_tmux_config
 	fi
 	pause
@@ -129,17 +133,17 @@ cmd_clean() {
 cmd_add() {
 	local input spec
 	clear_screen
-	printf 'Add a plugin to %s\n' "$TPP_PANEL_FILE"
-	printf 'owner/repo, a GitHub URL or any git URL, optionally with #branch\n\n'
-	read -rp 'plugin: ' input </dev/tty
+	printf '%s\n' "$(tpp_msg_add_title "$TPP_PANEL_FILE")"
+	printf '%s\n\n' "$TPP_MSG_ADD_FORMS"
+	read -rp "$TPP_MSG_ADD_PROMPT" input </dev/tty
 	if [[ -z $input ]]; then
 		return
 	fi
 	if spec=$(tpp_add "$input"); then
-		printf "\nAdded: set -g @plugin '%s'\n" "$spec"
+		printf "\n%s set -g @plugin '%s'\n" "$TPP_MSG_ADDED" "$spec"
 		warn_if_not_sourced
 		printf '\n'
-		run_tpm "Installing $(tpp_display_name "$spec")" "$TPP_TPM_DIR/bin/install_plugins"
+		run_tpm "$(tpp_msg_installing "$(tpp_display_name "$spec")")" "$TPP_TPM_DIR/bin/install_plugins"
 		reload_tmux_config
 	fi
 	pause
@@ -153,9 +157,9 @@ cmd_remove() {
 	clear_screen
 	for name in "$@"; do
 		if [[ $name == tpm ]]; then
-			printf 'tpm is not removed here.\n'
+			printf '%s\n' "$TPP_MSG_TPM_NOT_REMOVED"
 		elif source=$(tpp_declared_outside_panel_file "$name"); then
-			printf '%s is declared in %s, remove the line there.\n' "$name" "$source"
+			printf '%s\n' "$(tpp_msg_remove_elsewhere "$name" "$source")"
 		else
 			removable+=("$name")
 		fi
@@ -164,25 +168,39 @@ cmd_remove() {
 		pause
 		return
 	fi
-	printf '\nRemove: %s\n' "${removable[*]}"
-	if ! confirm "Delete their lines in $TPP_PANEL_FILE and their directories?"; then
+	printf '\n%s\n' "$(tpp_msg_remove_list "${removable[*]}")"
+	if ! confirm "$(tpp_msg_remove_confirm "$TPP_PANEL_FILE")"; then
 		return
 	fi
 	for name in "${removable[@]}"; do
 		tpp_remove "$name" || failed=1
 	done
 	reload_tmux_config
-	((failed)) && printf '\nSome plugins were not removed, see above.\n'
+	((failed)) && printf '\n%s\n' "$TPP_MSG_SOME_NOT_REMOVED"
 	pause
+}
+
+# hints <key> <action> [<key> <action>...]: one line of key hints, "<key>
+# <action>" joined by " · ".
+hints() {
+	local line=''
+	while (($# >= 2)); do
+		line+="${line:+ · }$1 $2"
+		shift 2
+	done
+	printf '%s' "$line"
 }
 
 header() {
 	local plugin_dir=${TPP_PLUGIN_DIR/#$HOME/\~} panel_file=${TPP_PANEL_FILE/#$HOME/\~}
-	printf 'plugins %s   file %s\n' "$plugin_dir" "$panel_file"
-	printf 'enter/u update · U all · a add · d remove · i install · c clean · r refresh · tab mark · q quit\n'
-	printf 'j/k move · J/K scroll preview · ctrl-d/ctrl-u scroll preview by half a page'
+	printf '%s\n' "$(tpp_msg_header "$plugin_dir" "$panel_file")"
+	hints enter/u "$TPP_MSG_HINT_UPDATE" U "$TPP_MSG_HINT_ALL" a "$TPP_MSG_HINT_ADD" \
+		d "$TPP_MSG_HINT_REMOVE" i "$TPP_MSG_HINT_INSTALL" c "$TPP_MSG_HINT_CLEAN" \
+		r "$TPP_MSG_HINT_REFRESH" tab "$TPP_MSG_HINT_MARK" q "$TPP_MSG_HINT_QUIT"
+	printf '\n'
+	hints j/k "$TPP_MSG_HINT_MOVE" J/K "$TPP_MSG_HINT_SCROLL" ctrl-d/ctrl-u "$TPP_MSG_HINT_SCROLL_HALF"
 	if ! tpp_panel_file_sourced; then
-		printf '\n\033[33m%s is not sourced from %s\033[0m' "$panel_file" "${TPP_USER_CONF/#$HOME/\~}"
+		printf '\n\033[33m%s\033[0m' "$(tpp_msg_not_sourced "$panel_file" "${TPP_USER_CONF/#$HOME/\~}")"
 	fi
 }
 
@@ -220,7 +238,7 @@ main() {
 	tpp_disable_credential_helpers
 	if [[ $cmd == ui ]]; then
 		check_dependencies
-		tpp_init || fail_and_exit "cannot start"
+		tpp_init || fail_and_exit "$TPP_MSG_CANNOT_START"
 		run_ui
 		return
 	fi
@@ -244,7 +262,7 @@ main() {
 	add) cmd_add ;;
 	remove) cmd_remove "$@" ;;
 	*)
-		tpp_err "unknown command: $cmd"
+		tpp_err "$(tpp_msg_unknown_command "$cmd")"
 		exit 2
 		;;
 	esac

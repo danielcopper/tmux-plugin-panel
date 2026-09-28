@@ -32,9 +32,9 @@ jobs:
       - name: Show shellcheck version
         run: shellcheck --version
       - name: Check syntax
-        run: for f in tmux-plugin-panel.tmux scripts/*.sh; do bash -n "$f"; done
+        run: for f in tmux-plugin-panel.tmux scripts/*.sh scripts/lang/*.sh; do bash -n "$f"; done
       - name: Run shellcheck
-        run: shellcheck -x tmux-plugin-panel.tmux scripts/*.sh test/*.bash test/*.bats
+        run: shellcheck -x tmux-plugin-panel.tmux scripts/*.sh scripts/lang/*.sh test/*.bash test/*.bats
 
   test:
     runs-on: ubuntu-latest

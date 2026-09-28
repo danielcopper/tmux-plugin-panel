@@ -1,9 +1,10 @@
 # shellcheck shell=bash
 #
 # Functions shared by the panel and the tests. Sourcing this file only
-# defines constants and functions. tpp_init asks the tmux server for the plugin
-# directory and options, and sources TPM's helpers; call it before anything
-# that reads declarations or plugin directories.
+# defines constants and functions, and loads the messages in the panel's
+# language (TPP_LANG, see tpp_language). tpp_init asks the tmux server for
+# the plugin directory and options, and sources TPM's helpers; call it before
+# anything that reads declarations or plugin directories.
 #
 # Globals set by tpp_init:
 #   TPP_PLUGIN_DIR  plugin directory, with a trailing slash
@@ -15,6 +16,31 @@ TPP_FETCH_TIMEOUT=10
 TPP_MIN_TMUX=3.2
 TPP_PLUGIN_LINE_RE='^[ \t]*set(-option)? +-g +@plugin'
 TPP_SPINNER_FRAMES=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+TPP_LANG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lang"
+
+# The language the panel speaks: the language part of the first of LC_ALL,
+# LC_MESSAGES and LANG that is not empty ("de" for de_DE.UTF-8), when
+# TPP_LANG_DIR has a catalogue for it; "en" otherwise, and for C and POSIX.
+tpp_language() {
+	local locale=${LC_ALL:-${LC_MESSAGES:-${LANG:-}}} lang
+	lang=${locale%%[_.@]*}
+	case $lang in
+	"" | *[!a-z]*) lang=en ;;
+	esac
+	[[ -f $TPP_LANG_DIR/$lang.sh ]] || lang=en
+	printf '%s\n' "$lang"
+}
+
+# The messages: the English ones, then those of the panel's language over
+# them, so a message the language's catalogue lacks is shown in English.
+TPP_LANG=$(tpp_language)
+# shellcheck source=scripts/lang/en.sh
+source "$TPP_LANG_DIR/en.sh"
+if [[ $TPP_LANG != en ]]; then
+	# Any catalogue in TPP_LANG_DIR; shellcheck is pointed at the German one.
+	# shellcheck source=scripts/lang/de.sh
+	source "$TPP_LANG_DIR/$TPP_LANG.sh"
+fi
 
 tpp_err() {
 	printf 'tmux-plugin-panel: %s\n' "$*" >&2
@@ -82,7 +108,7 @@ tpp_init() {
 	TPP_PLUGIN_DIR=$(tpp_plugin_dir)
 	TPP_TPM_DIR="${TPP_PLUGIN_DIR}tpm"
 	if [[ ! -f $TPP_TPM_DIR/scripts/helpers/plugin_functions.sh ]]; then
-		tpp_err "TPM not found in $TPP_TPM_DIR"
+		tpp_err "$(tpp_msg_tpm_not_found "$TPP_TPM_DIR")"
 		return 1
 	fi
 	# TPM's helpers: _get_user_tmux_conf, _sourced_files, _manual_expansion,
@@ -132,7 +158,7 @@ tpp_declarations_in() {
 tpp_declarations() {
 	local spec file option="${tpm_plugins_variable_name:-@tpm_plugins}"
 	for spec in $(tpp_tmux_option "$option" ""); do
-		printf '%s\t%s\n' "$spec" "$option option"
+		printf '%s\t%s\n' "$spec" "$(tpp_msg_option_source "$option")"
 	done
 	while IFS= read -r file; do
 		[[ -f $file ]] && tpp_declarations_in "$file"
@@ -204,6 +230,21 @@ tpp_git() {
 	LC_ALL=C GIT_TERMINAL_PROMPT=0 git -C "$dir" "$@"
 }
 
+# tpp_git_localized <dir> <arg>...: git for text the panel shows as git
+# words it, in the panel's language: for English under LC_ALL=C, which git
+# obeys over LANGUAGE; for another language with LANGUAGE set to it, which
+# git obeys when the locale git finds in LC_ALL, LC_MESSAGES or LANG is
+# installed (without it, git speaks English).
+tpp_git_localized() {
+	local dir=$1
+	shift
+	if [[ $TPP_LANG == en ]]; then
+		LC_ALL=C git -C "$dir" "$@"
+	else
+		LANGUAGE=$TPP_LANG git -C "$dir" "$@"
+	fi
+}
+
 # True when <dir> is the top level of its own git repository, so a plugin
 # directory inside a dotfiles repo is not mistaken for a checkout.
 tpp_is_git_checkout() {
@@ -235,11 +276,12 @@ tpp_status() {
 	echo "${status:-✓}"
 }
 
-# Age of the local HEAD commit, "-" when there is none. Never empty: the
-# records are read with IFS=tab, which would collapse an empty field.
+# Age of the local HEAD commit, as git words it in the panel's language, "-"
+# when there is none. Never empty: the records are read with IFS=tab, which
+# would collapse an empty field.
 tpp_age() {
 	local age=''
-	tpp_is_git_checkout "$1" && age=$(git -C "$1" log -1 --format=%cr 2>/dev/null)
+	tpp_is_git_checkout "$1" && age=$(tpp_git_localized "$1" log -1 --format=%cr 2>/dev/null)
 	printf '%s\n' "${age:--}"
 }
 
@@ -302,7 +344,8 @@ tpp_fetch_all() {
 # and source are empty for undeclared directories. tpp_collect_checking
 # prints the same rows without running git for the status: a declared plugin
 # that is installed gets "checking…" (shown while the fetch runs); the other
-# rows are unchanged.
+# rows are unchanged. status is the same in every language; tpp_status_text
+# gives the text the list shows for it.
 tpp_collect() {
 	tpp_collect_records status
 }
@@ -356,6 +399,37 @@ tpp_status_color() {
 	pinned) printf '\033[34m' ;;
 	*) printf '\033[2m' ;;
 	esac
+}
+
+# tpp_status_text <status>: the text the list shows for a status from
+# tpp_collect: the counts (✓, ↑N, ↓M) as they are, the words in the panel's
+# language.
+tpp_status_text() {
+	case $1 in
+	"checking…") printf '%s\n' "$TPP_MSG_STATUS_CHECKING" ;;
+	"not installed") printf '%s\n' "$TPP_MSG_STATUS_NOT_INSTALLED" ;;
+	"not declared") printf '%s\n' "$TPP_MSG_STATUS_NOT_DECLARED" ;;
+	pinned) printf '%s\n' "$TPP_MSG_STATUS_PINNED" ;;
+	"no upstream") printf '%s\n' "$TPP_MSG_STATUS_NO_UPSTREAM" ;;
+	"not a git repo") printf '%s\n' "$TPP_MSG_STATUS_NOT_GIT" ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
+# tpp_status_width: the width of the list's status column: its longest
+# status word or its header, whichever is longer, and two spaces. The counts
+# (↑N ↓M) are not measured: with up to five digits each they are narrower
+# than the longest English or German status word.
+# The width does not depend on the rows, so it stays the same when the
+# checking rows give way to the real status.
+tpp_status_width() {
+	local text width=0
+	for text in "$TPP_MSG_COLUMN_STATUS" "$TPP_MSG_STATUS_CHECKING" "$TPP_MSG_STATUS_NOT_INSTALLED" \
+		"$TPP_MSG_STATUS_NOT_DECLARED" "$TPP_MSG_STATUS_PINNED" "$TPP_MSG_STATUS_NO_UPSTREAM" \
+		"$TPP_MSG_STATUS_NOT_GIT"; do
+		((${#text} > width)) && width=${#text}
+	done
+	printf '%s\n' $((width + 2))
 }
 
 # tpp_github_path <url>: for a GitHub URL in any common form, prints the
@@ -412,13 +486,15 @@ tpp_style_label() {
 
 # Turns records from tpp_collect into fzf rows: "name<TAB>display". The
 # display starts with the styled tpp_label; the column is padded to the
-# widest label as shown, without its escape codes. The first line is the
+# widest label as shown, without its escape codes. The status follows as
+# tpp_status_text, in a column tpp_status_width wide. The first line is the
 # dim column header, with the same widths and an empty name; the panel runs
 # fzf with --header-lines=1, so it is shown above the rows and cannot be
 # selected.
 tpp_format_rows() {
 	local -a names labels label_widths statuses ages
-	local name status age spec _source label width=10 status_width=16 i pad
+	local name status age spec _source label width=10 status_width text i pad
+	status_width=$(tpp_status_width)
 	while IFS=$'\t' read -r name status age spec _source; do
 		[[ -n $name ]] || continue
 		label=$(tpp_label "$name" "$spec")
@@ -429,13 +505,18 @@ tpp_format_rows() {
 		ages+=("$age")
 		((${#label} > width)) && width=${#label}
 	done
-	printf '\t\033[2m%-*s%-*s%s\033[0m\n' $((width + 2)) plugin "$status_width" status "installed commit"
+	((${#TPP_MSG_COLUMN_PLUGIN} > width)) && width=${#TPP_MSG_COLUMN_PLUGIN}
+	printf -v pad '%*s' $((width + 2 - ${#TPP_MSG_COLUMN_PLUGIN})) ''
+	printf '\t\033[2m%s%s' "$TPP_MSG_COLUMN_PLUGIN" "$pad"
+	printf -v pad '%*s' $((status_width - ${#TPP_MSG_COLUMN_STATUS})) ''
+	printf '%s%s%s\033[0m\n' "$TPP_MSG_COLUMN_STATUS" "$pad" "$TPP_MSG_COLUMN_AGE"
 	for i in "${!names[@]}"; do
 		status=${statuses[i]}
+		text=$(tpp_status_text "$status")
 		printf -v pad '%*s' $((width - label_widths[i] + 2)) ''
 		printf '%s\t%s%s%s' "${names[i]}" "${labels[i]}" "$pad" "$(tpp_status_color "$status")"
-		printf -v pad '%*s' $((status_width - ${#status})) ''
-		printf '%s\033[0m%s\033[2m%s\033[0m\n' "$status" "$pad" "${ages[i]}"
+		printf -v pad '%*s' $((status_width - ${#text})) ''
+		printf '%s\033[0m%s\033[2m%s\033[0m\n' "$text" "$pad" "${ages[i]}"
 	done
 }
 
@@ -447,24 +528,24 @@ tpp_normalize_spec() {
 	input="${input#"${input%%[![:space:]]*}"}"
 	input="${input%"${input##*[![:space:]]}"}"
 	if [[ -z $input ]]; then
-		tpp_err "no plugin given"
+		tpp_err "$TPP_MSG_NO_PLUGIN_GIVEN"
 		return 1
 	fi
 	if [[ $input == *[[:space:]\'\"\\\;]* ]]; then
-		tpp_err "invalid plugin '$input': spaces, quotes and semicolons are not allowed"
+		tpp_err "$(tpp_msg_invalid_characters "$input")"
 		return 1
 	fi
 	url=${input%%#*}
 	if [[ $input == *#* ]]; then
 		branch=${input#*#}
 		if [[ -z $branch || $branch == *#* ]]; then
-			tpp_err "invalid branch in '$input'"
+			tpp_err "$(tpp_msg_invalid_branch "$input")"
 			return 1
 		fi
 	fi
 	if spec=$(tpp_github_path "$url"); then
 		if [[ ! $spec =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-			tpp_err "invalid GitHub URL '$url': expected github.com/owner/repo"
+			tpp_err "$(tpp_msg_invalid_github_url "$url")"
 			return 1
 		fi
 	elif [[ $url == *://* || $url == *@*:* ]]; then
@@ -472,13 +553,13 @@ tpp_normalize_spec() {
 	else
 		spec=${url%.git}
 		if [[ ! $spec =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-			tpp_err "invalid plugin '$url': expected owner/repo or a git URL"
+			tpp_err "$(tpp_msg_invalid_plugin "$url")"
 			return 1
 		fi
 	fi
 	case $(tpp_plugin_name "$spec") in
 	"" | . | ..)
-		tpp_err "invalid plugin '$url': no repository name"
+		tpp_err "$(tpp_msg_no_repository_name "$url")"
 		return 1
 		;;
 	esac
@@ -488,7 +569,7 @@ tpp_normalize_spec() {
 # Refuses to write when the panel file is the user's tmux config.
 tpp_panel_file_writable() {
 	if [[ $TPP_PANEL_FILE == "$TPP_USER_CONF" || ($TPP_PANEL_FILE -ef $TPP_USER_CONF) ]]; then
-		tpp_err "@tmux-plugin-panel-file points at $TPP_USER_CONF; the panel never edits the tmux config"
+		tpp_err "$(tpp_msg_panel_file_is_config "$TPP_USER_CONF")"
 		return 1
 	fi
 }
@@ -509,7 +590,7 @@ tpp_add() {
 	spec=$(tpp_normalize_spec "$1") || return 1
 	name=$(tpp_plugin_name "$spec")
 	if existing=$(tpp_find_declaration "$name"); then
-		tpp_err "'$name' is already declared as '${existing%%$'\t'*}' in ${existing#*$'\t'}"
+		tpp_err "$(tpp_msg_already_declared "$name" "${existing%%$'\t'*}" "${existing#*$'\t'}")"
 		return 1
 	fi
 	tpp_panel_file_writable || return 1
@@ -569,27 +650,27 @@ tpp_remove() {
 	name="${name%"${name##*[![:space:]]}"}"
 	case $name in
 	"" | . | .. | */* | *$'\n'*)
-		tpp_err "invalid plugin name '$name'"
+		tpp_err "$(tpp_msg_invalid_name "$name")"
 		return 1
 		;;
 	tpm)
-		tpp_err "refusing to remove tpm"
+		tpp_err "$TPP_MSG_REFUSE_TPM"
 		return 1
 		;;
 	esac
 	if [[ -z $TPP_PLUGIN_DIR || $TPP_PLUGIN_DIR == / ]]; then
-		tpp_err "plugin directory is not set"
+		tpp_err "$TPP_MSG_NO_PLUGIN_DIR"
 		return 1
 	fi
 	if source=$(tpp_declared_outside_panel_file "$name"); then
-		tpp_err "'$name' is declared in $source, remove the line there"
+		tpp_err "$(tpp_msg_declared_elsewhere "$name" "$source")"
 		return 1
 	fi
 	tpp_panel_file_declares "$name" && had_line=1
 	dir="${TPP_PLUGIN_DIR%/}/$name"
 	[[ -e $dir || -L $dir ]] && had_dir=1
 	if ((!had_line && !had_dir)); then
-		printf 'nothing to remove for %s\n' "$name"
+		printf '%s\n' "$(tpp_msg_nothing_to_remove "$name")"
 		return 0
 	fi
 	if ((had_line)); then
@@ -599,7 +680,7 @@ tpp_remove() {
 		# No trailing slash: a symlinked plugin directory loses the link only.
 		rm -rf -- "$dir" || return 1
 	fi
-	printf 'removed %s\n' "$name"
+	printf '%s\n' "$(tpp_msg_removed "$name")"
 }
 
 # tpp_head <dir>: the commit checked out in plugin directory <dir>; false
@@ -647,7 +728,8 @@ tpp_update_heads() {
 
 # tpp_update_summary <heads> <log> <status>: the result of TPM's update, one
 # line per plugin in the file <heads> (from tpp_update_heads, written before
-# the update): the plugin's name as the list shows it, then
+# the update): the plugin's name as the list shows it, then (the words in
+# the panel's language)
 #   "<old> → <new>"       the short commits, when its HEAD moved;
 #   "already up to date"  when it did not;
 #   "update failed"       when TPM's output in the file <log> says
@@ -669,15 +751,15 @@ tpp_update_summary() {
 			new=$(tpp_head "$dir") || new=-
 		fi
 		if [[ $old == - || $new == - ]] || grep -qxF "  \"$name\" update fail" "$log"; then
-			result="update failed"
+			result=$TPP_MSG_UPDATE_FAILED
 			failed=1
 		elif [[ $new != "$old" ]]; then
 			result="$(tpp_git "$dir" rev-parse --short "$old") → $(tpp_git "$dir" rev-parse --short "$new")"
 		elif ((rc)); then
-			result="update failed"
+			result=$TPP_MSG_UPDATE_FAILED
 			failed=1
 		else
-			result="already up to date"
+			result=$TPP_MSG_UP_TO_DATE
 		fi
 		label=$(tpp_label "$name" "$spec")
 		labels+=("$(tpp_style_label "$label" "$spec")")
@@ -697,9 +779,21 @@ tpp_update_summary() {
 	return 0
 }
 
-# Preview text for one plugin.
+# tpp_preview_field <width> <label> <value>: one line of the preview: <label>
+# padded to <width> characters, then two spaces and <value>.
+tpp_preview_field() {
+	local pad
+	printf -v pad '%*s' $(($1 + 2 - ${#2})) ''
+	printf '%s%s%s\n' "$2" "$pad" "$3"
+}
+
+# Preview text for one plugin. The values follow their labels in one column,
+# two spaces after the longest label.
 tpp_preview() {
-	local name=$1 decl spec='' source='' dir url
+	local name=$1 decl spec='' source='' dir url label width=0
+	for label in "$TPP_MSG_PREVIEW_DECLARED" "$TPP_MSG_PREVIEW_IN" "$TPP_MSG_PREVIEW_PATH" "$TPP_MSG_PREVIEW_REPO"; do
+		((${#label} > width)) && width=${#label}
+	done
 	dir="$TPP_PLUGIN_DIR$name"
 	if decl=$(tpp_find_declaration "$name"); then
 		spec=${decl%%$'\t'*}
@@ -707,21 +801,21 @@ tpp_preview() {
 	fi
 	printf '%s\n\n' "$(tpp_style_label "$(tpp_label "$name" "$spec")" "$spec")"
 	if [[ -n $spec ]]; then
-		printf 'declared  %s\n' "$spec"
-		printf 'in        %s\n' "$source"
+		tpp_preview_field "$width" "$TPP_MSG_PREVIEW_DECLARED" "$spec"
+		tpp_preview_field "$width" "$TPP_MSG_PREVIEW_IN" "$source"
 	else
-		printf 'declared  nowhere (not declared)\n'
+		tpp_preview_field "$width" "$TPP_MSG_PREVIEW_DECLARED" "$TPP_MSG_PREVIEW_NOWHERE"
 	fi
 	if [[ ! -d $dir ]]; then
 		url=${spec%%#*}
 		[[ $url =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] && url="https://github.com/$url"
-		printf 'repo      %s\n' "$url"
-		printf '\nnot installed\n'
+		tpp_preview_field "$width" "$TPP_MSG_PREVIEW_REPO" "$url"
+		printf '\n%s\n' "$TPP_MSG_STATUS_NOT_INSTALLED"
 		return
 	fi
-	printf 'path      %s\n' "$dir"
+	tpp_preview_field "$width" "$TPP_MSG_PREVIEW_PATH" "$dir"
 	if ! tpp_is_git_checkout "$dir"; then
-		printf '\nnot a git repository\n'
+		printf '\n%s\n' "$TPP_MSG_PREVIEW_NOT_GIT"
 		return
 	fi
 	url=$(tpp_git "$dir" remote get-url origin 2>/dev/null)
@@ -730,17 +824,17 @@ tpp_preview() {
 	# git does not prompt for any; the preview shows it without "git::@".
 	# Any other URL is shown as it is.
 	url=${url/#https:\/\/git::@github.com\//https://github.com/}
-	printf 'repo      %s\n' "${url:-(no origin)}"
+	tpp_preview_field "$width" "$TPP_MSG_PREVIEW_REPO" "${url:-$TPP_MSG_PREVIEW_NO_ORIGIN}"
 	if ! tpp_git "$dir" rev-parse -q --verify '@{u}' >/dev/null; then
-		printf '\nno upstream branch\n'
+		printf '\n%s\n' "$TPP_MSG_PREVIEW_NO_UPSTREAM"
 		return
 	fi
 	local pending
 	pending=$(git -C "$dir" log --oneline --no-decorate 'HEAD..@{u}' 2>/dev/null)
 	if [[ -n $pending ]]; then
-		printf '\npending commits:\n%s\n' "$pending"
+		printf '\n%s\n%s\n' "$TPP_MSG_PREVIEW_PENDING" "$pending"
 	else
-		printf '\nno pending commits\n'
+		printf '\n%s\n' "$TPP_MSG_PREVIEW_NO_PENDING"
 	fi
 }
 

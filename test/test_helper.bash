@@ -155,6 +155,16 @@ status_of() {
 	tpp_collect | awk -F '\t' -v n="$1" '$1 == n { print $2 }'
 }
 
+# german <command> [<arg>...]: runs <command> with a German locale in LANG
+# and LC_ALL unset. LANG rather than LC_ALL: bash warns at start when LC_ALL
+# names a locale that is not installed, and de_DE.UTF-8 need not be. For a
+# command line run by on_terminal, the same prefix is GERMAN_ENV.
+# shellcheck disable=SC2034 # used by the .bats files
+GERMAN_ENV='env -u LC_ALL LANG=de_DE.UTF-8'
+german() {
+	env -u LC_ALL LANG=de_DE.UTF-8 "$@"
+}
+
 # on_terminal <command>: runs the shell command <command> on a terminal of its
 # own (a pty from util-linux script) and prints what the terminal showed. The
 # terminal gets one key press as input, for the panel's "Press any key". A
