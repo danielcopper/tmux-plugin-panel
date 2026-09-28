@@ -180,25 +180,38 @@ cmd_remove() {
 	pause
 }
 
-# hints <key> <action> [<key> <action>...]: one line of key hints, "<key>
-# <action>" joined by " · ".
+# hints <counts> <key> <action> [<key> <action>...]: the key hints, each
+# "<key> <action>", joined by " · " in lines of as many hints as the numbers
+# in <counts> say ("9 3": nine, then three). The hints left over after the
+# last number, or all of them for a number that is not above 0, share one
+# more line. The lines are separated by newlines, without one at the end.
 hints() {
-	local line=''
+	local counts=$1 count line text='' newline=$'\n'
+	shift
 	while (($# >= 2)); do
-		line+="${line:+ · }$1 $2"
-		shift 2
+		count=${counts%% *}
+		counts=${counts#"$count"}
+		counts=${counts# }
+		[[ $count == [1-9]* && $count != *[!0-9]* ]] || count=$(($# / 2))
+		line=''
+		while ((count > 0 && $# >= 2)); do
+			line+="${line:+ · }$1 $2"
+			shift 2
+			count=$((count - 1))
+		done
+		text+="${text:+$newline}$line"
 	done
-	printf '%s' "$line"
+	printf '%s' "$text"
 }
 
 header() {
 	local plugin_dir=${TPP_PLUGIN_DIR/#$HOME/\~} panel_file=${TPP_PANEL_FILE/#$HOME/\~}
 	printf '%s\n' "$(tpp_msg_header "$plugin_dir" "$panel_file")"
-	hints enter/u "$TPP_MSG_HINT_UPDATE" U "$TPP_MSG_HINT_ALL" a "$TPP_MSG_HINT_ADD" \
+	hints "$TPP_MSG_HINT_LINES" \
+		enter/u "$TPP_MSG_HINT_UPDATE" U "$TPP_MSG_HINT_ALL" a "$TPP_MSG_HINT_ADD" \
 		d "$TPP_MSG_HINT_REMOVE" i "$TPP_MSG_HINT_INSTALL" c "$TPP_MSG_HINT_CLEAN" \
-		r "$TPP_MSG_HINT_REFRESH" tab "$TPP_MSG_HINT_MARK" q "$TPP_MSG_HINT_QUIT"
-	printf '\n'
-	hints j/k "$TPP_MSG_HINT_MOVE" J/K "$TPP_MSG_HINT_SCROLL" ctrl-d/ctrl-u "$TPP_MSG_HINT_SCROLL_HALF"
+		r "$TPP_MSG_HINT_REFRESH" tab "$TPP_MSG_HINT_MARK" q "$TPP_MSG_HINT_QUIT" \
+		j/k "$TPP_MSG_HINT_MOVE" J/K "$TPP_MSG_HINT_SCROLL" ctrl-d/ctrl-u "$TPP_MSG_HINT_SCROLL_HALF"
 	if ! tpp_panel_file_sourced; then
 		printf '\n\033[33m%s\033[0m' "$(tpp_msg_not_sourced "$panel_file" "${TPP_USER_CONF/#$HOME/\~}")"
 	fi

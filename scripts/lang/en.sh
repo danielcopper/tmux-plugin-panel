@@ -11,7 +11,9 @@
 # place them in any order. Key names (enter, ctrl-d, …) are not part of the
 # messages.
 
-# The list's header: the key hints, as "<key> <action>".
+# The list's header: the key hints, as "<key> <action>", in the order of the
+# variables below. TPP_MSG_HINT_LINES says how many hints each line holds; the
+# hints left over after its last number share one more line.
 TPP_MSG_HINT_UPDATE='update'
 TPP_MSG_HINT_ALL='all'
 TPP_MSG_HINT_ADD='add'
@@ -24,6 +26,7 @@ TPP_MSG_HINT_QUIT='quit'
 TPP_MSG_HINT_MOVE='move'
 TPP_MSG_HINT_SCROLL='scroll preview'
 TPP_MSG_HINT_SCROLL_HALF='scroll preview by half a page'
+TPP_MSG_HINT_LINES='9 3'
 # tpp_msg_header <plugin directory> <panel file>
 tpp_msg_header() { printf 'plugins %s   file %s' "$1" "$2"; }
 # tpp_msg_not_sourced <panel file> <tmux config>

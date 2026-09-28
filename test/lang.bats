@@ -2,7 +2,7 @@
 
 bats_require_minimum_version 1.5.0
 
-DIM=$'\033[2m' BOLD=$'\033[1m' RESET=$'\033[0m'
+DIM=$'\033[2m' BOLD=$'\033[1m' YELLOW=$'\033[33m' RESET=$'\033[0m'
 
 setup() {
 	load test_helper
@@ -120,6 +120,25 @@ fzf_option() {
 	return 1
 }
 
+@test "the list's header in English: the paths, two lines of key hints, and the note when the file is not sourced" {
+	fake_fzf
+	run "$TPP_ROOT/scripts/panel.sh"
+	[ "$status" -eq 0 ]
+	local header
+	header=$(fzf_option --header)
+	[ "$header" = "plugins ~/.config/tmux/plugins/   file ~/.config/tmux/plugins.conf
+enter/u update · U all · a add · d remove · i install · c clean · r refresh · tab mark · q quit
+j/k move · J/K scroll preview · ctrl-d/ctrl-u scroll preview by half a page" ]
+	printf "run '%s/tpm/tpm'\n" "$PLUGIN_DIR" >"$TMUX_CONF"
+	run "$TPP_ROOT/scripts/panel.sh"
+	[ "$status" -eq 0 ]
+	header=$(fzf_option --header)
+	[ "$header" = "plugins ~/.config/tmux/plugins/   file ~/.config/tmux/plugins.conf
+enter/u update · U all · a add · d remove · i install · c clean · r refresh · tab mark · q quit
+j/k move · J/K scroll preview · ctrl-d/ctrl-u scroll preview by half a page
+${YELLOW}~/.config/tmux/plugins.conf is not sourced from ~/.config/tmux/tmux.conf${RESET}" ]
+}
+
 @test "the list speaks German under a German locale: header, column header, statuses" {
 	fake_fzf
 	make_remote alpha
@@ -130,31 +149,60 @@ fzf_option() {
 	[ "$status" -eq 0 ]
 	local header
 	header=$(fzf_option --header)
-	[[ $header == "Plugins ~/.config/tmux/plugins/   Datei ~/.config/tmux/plugins.conf"$'\n'* ]]
-	[[ $header == *$'\n'"enter/u Update · U alle · a hinzufügen · d entfernen · i installieren · c aufräumen · r neu laden · tab markieren · q beenden"$'\n'* ]]
-	[[ $header == *$'\n'"j/k bewegen · J/K Vorschau scrollen · ctrl-d/ctrl-u Vorschau um eine halbe Seite scrollen" ]]
+	[ "$header" = "Plugins ~/.config/tmux/plugins/   Datei ~/.config/tmux/plugins.conf
+enter/u Update · U alle · a hinzufügen · d entfernen
+i installieren · c aufräumen · r neu laden · tab markieren · q beenden
+j/k bewegen · J/K Vorschau scrollen · ctrl-d/ctrl-u Vorschau um eine halbe Seite scrollen" ]
 	run cat "$TEST_ROOT/fzf-input"
 	[[ ${lines[0]} == $'\t'"${DIM}Plugin "*"Status "*"installierter Commit${RESET}" ]]
 	[[ ${lines[1]} == alpha$'\t'*"wird geprüft…"* ]]
 	[[ ${lines[2]} == missing$'\t'*"nicht installiert"* ]]
 }
 
+@test "no German key hint line is wider than the English first one" {
+	fake_fzf
+	run "$TPP_ROOT/scripts/panel.sh"
+	[ "$status" -eq 0 ]
+	local -a english_lines german_lines
+	local line
+	while IFS= read -r line; do english_lines+=("$line"); done < <(fzf_option --header)
+	run german "$TPP_ROOT/scripts/panel.sh"
+	[ "$status" -eq 0 ]
+	while IFS= read -r line; do german_lines+=("$line"); done < <(fzf_option --header)
+	# The first header line holds the paths; the key hints follow.
+	[ "${#english_lines[1]}" -eq 95 ]
+	[ "${#german_lines[@]}" -eq 4 ]
+	for line in "${german_lines[@]:1}"; do
+		[ "${#line}" -le "${#english_lines[1]}" ] || {
+			echo "${#line} characters: $line"
+			return 1
+		}
+	done
+}
+
 @test "the German status column is as wide as its longest status word" {
 	declare_plugin someone/missing
 	mkdir -p "$PLUGIN_DIR/orphan"
+	make_remote pinned
+	push_commit pinned dev
+	clone_plugin pinned dev
+	declare_plugin "someone/pinned#dev"
 	run german "$TPP_ROOT/scripts/panel.sh" rows
 	[ "$status" -eq 0 ]
-	[ "${#lines[@]}" -eq 3 ]
+	[ "${#lines[@]}" -eq 4 ]
 	# The status column starts two columns after the longest name,
-	# someone/missing; "nicht installiert", the longest German status word,
-	# has 17 characters, and two spaces follow it.
+	# someone/missing; "nicht installiert" and "nicht eingetragen", the
+	# longest German status words, have 17 characters, and two spaces follow.
+	# The age of the pinned plugin is git's, in German or English, so only
+	# the part before it is compared.
 	local i visible expected
-	local -a names=(Plugin someone/missing orphan)
-	local -a rest=("Status" "installierter Commit" "nicht installiert" - "nicht deklariert" -)
-	for i in 0 1 2; do
+	local -a names=(Plugin someone/missing orphan someone/pinned)
+	local -a statuses=(Status "nicht installiert" "nicht eingetragen" gepinnt)
+	for i in 0 1 2 3; do
 		visible=$(printf '%s' "${lines[i]#*$'\t'}" | sed $'s/\033\\[[0-9;]*m//g')
-		printf -v expected '%-17s%-19s%s' "${names[i]}" "${rest[2 * i]}" "${rest[2 * i + 1]}"
-		[ "$visible" = "$expected" ]
+		printf -v expected '%-17s%-19s' "${names[i]}" "${statuses[i]}"
+		[ "${visible:0:36}" = "$expected" ]
+		[[ ${visible:36:1} != ' ' ]]
 	done
 }
 
@@ -163,10 +211,16 @@ fzf_option() {
 	run german "$TPP_ROOT/scripts/panel.sh" preview missing
 	[ "$status" -eq 0 ]
 	[ "${lines[0]}" = "${DIM}someone/${RESET}${BOLD}missing${RESET}" ]
-	[ "${lines[1]}" = "deklariert  someone/missing" ]
-	[ "${lines[2]}" = "in          $PANEL_FILE" ]
-	[ "${lines[3]}" = "Repo        https://github.com/someone/missing" ]
+	# "eingetragen", the longest label, has 11 characters.
+	[ "${lines[1]}" = "eingetragen  someone/missing" ]
+	[ "${lines[2]}" = "in           $PANEL_FILE" ]
+	[ "${lines[3]}" = "Repo         https://github.com/someone/missing" ]
 	[ "${lines[4]}" = "nicht installiert" ]
+	mkdir -p "$PLUGIN_DIR/orphan"
+	run german "$TPP_ROOT/scripts/panel.sh" preview orphan
+	[ "$status" -eq 0 ]
+	[ "${lines[1]}" = "eingetragen  nirgends (nicht eingetragen)" ]
+	[ "${lines[2]}" = "Pfad         $PLUGIN_DIR/orphan" ]
 }
 
 @test "a German confirmation takes j for yes" {
@@ -176,7 +230,7 @@ fzf_option() {
 	# j and enter answer the question, x is the key for "Press any key".
 	run bash -c 'printf "j\rx" | SHELL=/bin/bash timeout 30 script -qec "$1 $2 clean" /dev/null' _ "$GERMAN_ENV" "$panel"
 	[ "$status" -eq 0 ]
-	[[ $output == *"Verzeichnisse ohne Deklaration:"*"Von TPM entfernen lassen? [j/N]"*'"orphan" clean success'* ]]
+	[[ $output == *"Verzeichnisse ohne Eintrag:"*"Von TPM entfernen lassen? [j/N]"*'"orphan" clean success'* ]]
 	[[ $output == *"Beliebige Taste drücken, um zur Liste zurückzukehren."* ]]
 	[ ! -e "$PLUGIN_DIR/orphan" ]
 }

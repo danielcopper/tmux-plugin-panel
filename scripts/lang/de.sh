@@ -15,6 +15,7 @@ TPP_MSG_HINT_QUIT='beenden'
 TPP_MSG_HINT_MOVE='bewegen'
 TPP_MSG_HINT_SCROLL='Vorschau scrollen'
 TPP_MSG_HINT_SCROLL_HALF='Vorschau um eine halbe Seite scrollen'
+TPP_MSG_HINT_LINES='4 5 3'
 tpp_msg_header() { printf 'Plugins %s   Datei %s' "$1" "$2"; }
 tpp_msg_not_sourced() { printf '%s wird nicht aus %s eingebunden' "$1" "$2"; }
 
@@ -23,16 +24,16 @@ TPP_MSG_COLUMN_STATUS='Status'
 TPP_MSG_COLUMN_AGE='installierter Commit'
 TPP_MSG_STATUS_CHECKING='wird geprüft…'
 TPP_MSG_STATUS_NOT_INSTALLED='nicht installiert'
-TPP_MSG_STATUS_NOT_DECLARED='nicht deklariert'
-TPP_MSG_STATUS_PINNED='fixiert'
+TPP_MSG_STATUS_NOT_DECLARED='nicht eingetragen'
+TPP_MSG_STATUS_PINNED='gepinnt'
 TPP_MSG_STATUS_NO_UPSTREAM='kein Upstream'
 TPP_MSG_STATUS_NOT_GIT='kein Git-Repo'
 
-TPP_MSG_PREVIEW_DECLARED='deklariert'
+TPP_MSG_PREVIEW_DECLARED='eingetragen'
 TPP_MSG_PREVIEW_IN='in'
 TPP_MSG_PREVIEW_PATH='Pfad'
 TPP_MSG_PREVIEW_REPO='Repo'
-TPP_MSG_PREVIEW_NOWHERE='nirgends (nicht deklariert)'
+TPP_MSG_PREVIEW_NOWHERE='nirgends (nicht eingetragen)'
 TPP_MSG_PREVIEW_NOT_GIT='kein Git-Repository'
 TPP_MSG_PREVIEW_NO_ORIGIN='(kein origin)'
 TPP_MSG_PREVIEW_NO_UPSTREAM='kein Upstream-Branch'
@@ -49,7 +50,7 @@ TPP_MSG_UP_TO_DATE='bereits aktuell'
 TPP_MSG_UPDATE_FAILED='Update fehlgeschlagen'
 TPP_MSG_INSTALLING_MISSING='Fehlende Plugins werden installiert'
 TPP_MSG_NOTHING_TO_CLEAN='Nichts aufzuräumen. Beliebige Taste drücken, um zur Liste zurückzukehren.'
-TPP_MSG_CLEAN_LIST='Verzeichnisse ohne Deklaration:'
+TPP_MSG_CLEAN_LIST='Verzeichnisse ohne Eintrag:'
 TPP_MSG_CLEAN_CONFIRM='Von TPM entfernen lassen?'
 TPP_MSG_CLEANING='Wird aufgeräumt'
 TPP_MSG_ADD_FORMS='owner/repo, eine GitHub-URL oder eine beliebige Git-URL, optional mit #branch'
@@ -68,7 +69,7 @@ tpp_msg_installing() { printf '%s wird installiert' "$1"; }
 tpp_msg_add_title() { printf 'Plugin zu %s hinzufügen' "$1"; }
 tpp_msg_note_not_sourced() { printf 'Hinweis: %s wird nicht aus %s eingebunden, daher sieht TPM die Plugins darin nicht.' "$1" "$2"; }
 tpp_msg_add_source_line() { printf "Diese Zeile vor \"run '…/tpm/tpm'\" einfügen:  source-file %s" "$1"; }
-tpp_msg_remove_elsewhere() { printf '%s ist in %s deklariert, bitte die Zeile dort entfernen.' "$1" "$2"; }
+tpp_msg_remove_elsewhere() { printf '%s ist in %s eingetragen, bitte die Zeile dort entfernen.' "$1" "$2"; }
 tpp_msg_remove_list() { printf 'Entfernen: %s' "$1"; }
 tpp_msg_remove_confirm() { printf 'Die Zeilen in %s und die Verzeichnisse löschen?' "$1"; }
 
@@ -95,8 +96,8 @@ tpp_msg_invalid_github_url() { printf "ungültige GitHub-URL '%s': erwartet gith
 tpp_msg_invalid_plugin() { printf "ungültiges Plugin '%s': erwartet owner/repo oder eine Git-URL" "$1"; }
 tpp_msg_no_repository_name() { printf "ungültiges Plugin '%s': kein Repository-Name" "$1"; }
 tpp_msg_panel_file_is_config() { printf '@tmux-plugin-panel-file zeigt auf %s; das Panel bearbeitet nie die tmux-Konfiguration' "$1"; }
-tpp_msg_already_declared() { printf "'%s' ist bereits als '%s' in %s deklariert" "$1" "$2" "$3"; }
+tpp_msg_already_declared() { printf "'%s' ist bereits als '%s' in %s eingetragen" "$1" "$2" "$3"; }
 tpp_msg_invalid_name() { printf "ungültiger Plugin-Name '%s'" "$1"; }
-tpp_msg_declared_elsewhere() { printf "'%s' ist in %s deklariert, bitte die Zeile dort entfernen" "$1" "$2"; }
+tpp_msg_declared_elsewhere() { printf "'%s' ist in %s eingetragen, bitte die Zeile dort entfernen" "$1" "$2"; }
 tpp_msg_nothing_to_remove() { printf 'nichts zu entfernen für %s' "$1"; }
 tpp_msg_removed() { printf '%s entfernt' "$1"; }
