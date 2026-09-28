@@ -598,7 +598,8 @@ tpp_preview() {
 	# TPM clones an owner/repo declaration from
 	# https://git::@github.com/owner/repo, with credentials in the URL so
 	# git does not prompt for any; the preview shows it without "git::@".
-	url=${url/:\/\/git::@/://}
+	# Any other URL is shown as it is.
+	url=${url/#https:\/\/git::@github.com\//https://github.com/}
 	printf 'repo      %s\n' "${url:-(no origin)}"
 	if ! tpp_git "$dir" rev-parse -q --verify '@{u}' >/dev/null; then
 		printf '\nno upstream branch\n'

@@ -168,4 +168,8 @@ binding_of() {
 	run "$TPP_ROOT/scripts/panel.sh" preview alpha
 	[ "$status" -eq 0 ]
 	[[ $output == *"repo      https://someone@example.com/alpha.git"$'\n'* ]]
+	git -C "$PLUGIN_DIR/alpha" remote set-url origin https://git::@example.com/x
+	run "$TPP_ROOT/scripts/panel.sh" preview alpha
+	[ "$status" -eq 0 ]
+	[[ $output == *"repo      https://git::@example.com/x"$'\n'* ]]
 }
