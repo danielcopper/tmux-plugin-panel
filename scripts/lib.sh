@@ -725,17 +725,21 @@ tpp_preview() {
 
 # tpp_spinner <message> <owner>: the spinner line of tpp_spin, run in the
 # background: "<message> ⠋", with the frame turning every 0.1 s until it is
-# killed or process <owner> is gone. It draws nothing while the terminal's
-# modes differ from those it started with: a program asking for a passphrase
-# (ssh) turns echo off while it waits for the answer. Every redraw saves and
-# restores the cursor (ESC 7, ESC 8), so a prompt printed on the spinner's
-# line keeps its cursor where the answer goes.
+# killed, process <owner> is gone, or the terminal it started on is gone. It
+# draws nothing while the terminal's modes differ from those it started with:
+# a program asking for a passphrase (ssh) turns echo off while it waits for
+# the answer. Every redraw saves and restores the cursor (ESC 7, ESC 8), so a
+# prompt printed on the spinner's line keeps its cursor where the answer
+# goes. Without a terminal (no /dev/tty at the start) it only draws.
 tpp_spinner() {
-	local message=$1 owner=$2 modes i=1
+	local message=$1 owner=$2 modes now i=1
 	modes=$(stty -g 2>/dev/null </dev/tty)
 	printf '\r%s %s' "$message" "${TPP_SPINNER_FRAMES[0]}"
 	while sleep 0.1 && kill -0 "$owner" 2>/dev/null; do
-		[[ $(stty -g 2>/dev/null </dev/tty) == "$modes" ]] || continue
+		if [[ -n $modes ]]; then
+			now=$(stty -g 2>/dev/null </dev/tty) || return 0
+			[[ $now == "$modes" ]] || continue
+		fi
 		printf '\0337\r%s %s\0338' "$message" "${TPP_SPINNER_FRAMES[i++ % ${#TPP_SPINNER_FRAMES[@]}]}" ||
 			return 0
 	done
@@ -755,10 +759,13 @@ tpp_spinner() {
 # in the group afterwards (TPM's background jobs ignore SIGINT) is stopped
 # with SIGTERM.
 tpp_spin() {
-	local message=$1 log=$2 group spinner rc
+	# The owner is taken here: the words of a background command are expanded
+	# in the forked child, where $BASHPID would be the spinner's own pid.
+	# $$ (bash 3.2 has no BASHPID) is the script's shell, which runs tpp_spin.
+	local message=$1 log=$2 owner=$$ group spinner rc
 	shift 2
 	group=$(mktemp) || return 1
-	tpp_spinner "$message" "$BASHPID" &
+	tpp_spinner "$message" "$owner" &
 	spinner=$!
 	bash -c 'set -m; log=$1; shift; "$@" >"$log" 2>&1 & echo "$!" >"$0"; fg %% >/dev/null' \
 		"$group" "$log" "$@"

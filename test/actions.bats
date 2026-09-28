@@ -54,11 +54,12 @@ EOF2
 }
 
 @test "the spinner shows its message while the command runs, then clears its line" {
-	load_lib
-	run tpp_spin "Working" "$TEST_ROOT/log" bash -c 'echo out; echo err >&2; sleep 0.3'
+	write_spin
+	# A spinner left running would make tpp_spin wait forever: the timeout
+	# turns that into a failure.
+	run timeout 20 "$TEST_ROOT/spin" bash -c 'echo out; echo err >&2; sleep 0.3'
 	[ "$status" -eq 0 ]
-	[[ $output == $'\r'"Working ⠋"* ]]
-	[[ $output == *$'\r\033[K' ]]
+	[[ $output == $'\r'"Working ⠋"*$'\r\033[K'"status 0"$'\n'"no children" ]]
 	[ "$(cat "$TEST_ROOT/log")" = $'out\nerr' ]
 }
 
@@ -77,6 +78,70 @@ EOF2
 	[ "$status" -eq 0 ]
 	[[ $output == $'\r'"Working ⠋"*$'\r\033[K'"status 3"$'\n'"no children" ]]
 	[ -z "$(alive "$TEST_ROOT/pids")" ]
+}
+
+@test "the spinner stops when the shell running tpp_spin is killed" {
+	cat >"$TEST_ROOT/long" <<'EOF2'
+#!/usr/bin/env bash
+echo $$ >>"$1/pids"
+exec sleep 30
+EOF2
+	chmod +x "$TEST_ROOT/long"
+	write_spin
+	"$TEST_ROOT/spin" "$TEST_ROOT/long" "$TEST_ROOT" >"$TEST_ROOT/out" 2>&1 3>&- &
+	local runner=$! child spinner=
+	for _ in $(seq 50); do
+		[[ -s $TEST_ROOT/pids ]] && break
+		sleep 0.1
+	done
+	# The runner's children: the child shell that runs the command in the
+	# foreground, and the spinner.
+	for child in $(pgrep -P "$runner"); do
+		[[ $(ps -o args= -p "$child") == "bash -c set -m"* ]] || spinner=$child
+	done
+	[ -n "$spinner" ]
+	echo "$spinner" >>"$TEST_ROOT/pids"
+	kill -0 "$spinner"
+	kill -KILL "$runner"
+	wait "$runner" 2>/dev/null || true
+	for _ in $(seq 10); do
+		kill -0 "$spinner" 2>/dev/null || break
+		sleep 0.1
+	done
+	run ! kill -0 "$spinner"
+}
+
+@test "the spinner stops when its terminal is gone" {
+	# A spinner that outlives the terminal it draws on: SIGHUP ignored, and
+	# its owner still running.
+	sleep 30 3>&- &
+	local owner=$!
+	echo "$owner" >>"$TEST_ROOT/pids"
+	cat >"$TEST_ROOT/hup-spinner" <<EOF2
+#!/usr/bin/env bash
+trap '' HUP
+source "$TPP_ROOT/scripts/lib.sh"
+echo \$\$ >"$TEST_ROOT/spinner-pid"
+tpp_spinner Working "$owner"
+EOF2
+	chmod +x "$TEST_ROOT/hup-spinner"
+	tmux new-window -d -n spin "$TEST_ROOT/hup-spinner"
+	for _ in $(seq 50); do
+		[[ -s $TEST_ROOT/spinner-pid ]] && break
+		sleep 0.1
+	done
+	local spinner
+	spinner=$(cat "$TEST_ROOT/spinner-pid")
+	echo "$spinner" >>"$TEST_ROOT/pids"
+	sleep 0.3
+	kill -0 "$spinner"
+	# Closing the window hangs up the spinner's terminal.
+	tmux kill-window -t spin
+	for _ in $(seq 10); do
+		kill -0 "$spinner" 2>/dev/null || break
+		sleep 0.1
+	done
+	run ! kill -0 "$spinner"
 }
 
 @test "Ctrl-C stops the command and everything it started, then the spinner" {
