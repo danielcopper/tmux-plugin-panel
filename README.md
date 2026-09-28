@@ -87,7 +87,7 @@ repository, and for an installed plugin the commits an update would bring.
 | `no upstream`    | the checked-out branch does not track a remote branch                                                    |
 | `not a git repo` | the plugin directory is not a git checkout                                                               |
 
-The last column is the age of the plugin's current commit.
+The last column, `installed commit`, is the age of the plugin's current commit.
 
 ### Adding a plugin
 

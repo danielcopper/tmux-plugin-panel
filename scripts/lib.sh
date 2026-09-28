@@ -381,10 +381,13 @@ tpp_style_label() {
 
 # Turns records from tpp_collect into fzf rows: "name<TAB>display". The
 # display starts with the styled tpp_label; the column is padded to the
-# widest label as shown, without its escape codes.
+# widest label as shown, without its escape codes. The first line is the
+# dim column header, with the same widths and an empty name; the panel runs
+# fzf with --header-lines=1, so it is shown above the rows and cannot be
+# selected.
 tpp_format_rows() {
 	local -a names labels label_widths statuses ages
-	local name status age spec _source label width=10 i pad
+	local name status age spec _source label width=10 status_width=16 i pad
 	while IFS=$'\t' read -r name status age spec _source; do
 		[[ -n $name ]] || continue
 		label=$(tpp_label "$name" "$spec")
@@ -395,11 +398,12 @@ tpp_format_rows() {
 		ages+=("$age")
 		((${#label} > width)) && width=${#label}
 	done
+	printf '\t\033[2m%-*s%-*s%s\033[0m\n' $((width + 2)) plugin "$status_width" status "installed commit"
 	for i in "${!names[@]}"; do
 		status=${statuses[i]}
 		printf -v pad '%*s' $((width - label_widths[i] + 2)) ''
 		printf '%s\t%s%s%s' "${names[i]}" "${labels[i]}" "$pad" "$(tpp_status_color "$status")"
-		printf -v pad '%*s' $((16 - ${#status})) ''
+		printf -v pad '%*s' $((status_width - ${#status})) ''
 		printf '%s\033[0m%s\033[2m%s\033[0m\n' "$status" "$pad" "${ages[i]}"
 	done
 }

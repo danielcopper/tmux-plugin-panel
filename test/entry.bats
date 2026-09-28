@@ -61,9 +61,10 @@ binding_of() {
 	declare_plugin "someone/missing"
 	run "$TPP_ROOT/scripts/panel.sh" rows --fetch
 	[ "$status" -eq 0 ]
-	[ "${#lines[@]}" -eq 2 ]
-	[[ ${lines[0]} == alpha$'\t'"$(remote_url alpha) "*✓* ]]
-	[[ ${lines[1]} == missing$'\t'"${DIM}someone/${RESET}${BOLD}missing${RESET} "*"not installed"* ]]
+	[ "${#lines[@]}" -eq 3 ]
+	[[ ${lines[0]} == $'\t'"${DIM}plugin "*"status "*"installed commit${RESET}" ]]
+	[[ ${lines[1]} == alpha$'\t'"$(remote_url alpha) "*✓* ]]
+	[[ ${lines[2]} == missing$'\t'"${DIM}someone/${RESET}${BOLD}missing${RESET} "*"not installed"* ]]
 }
 
 @test "rows keep their columns when a record has no age" {
@@ -74,7 +75,7 @@ binding_of() {
 	run bash -c 'source "$1/scripts/lib.sh"; tpp_init; tpp_collect_checking | tpp_format_rows' _ "$TPP_ROOT"
 	[ "$status" -eq 0 ]
 	[[ $output != *"$PANEL_FILE"* ]]
-	[[ ${lines[1]} == missing$'\t'"${DIM}someone/${RESET}${BOLD}missing${RESET} "*"not installed"*$'\033[2m-\033[0m' ]]
+	[[ ${lines[2]} == missing$'\t'"${DIM}someone/${RESET}${BOLD}missing${RESET} "*"not installed"*$'\033[2m-\033[0m' ]]
 }
 
 @test "panel.sh preview lists pending commits" {
@@ -119,25 +120,39 @@ binding_of() {
 	mkdir -p "$PLUGIN_DIR/orphan"
 	run "$TPP_ROOT/scripts/panel.sh" rows
 	[ "$status" -eq 0 ]
-	[ "${#lines[@]}" -eq 6 ]
+	[ "${#lines[@]}" -eq 7 ]
 	# owner/repo: the owner dim, the repo bold; a directory without a
 	# declaration: bold; any other URL: plain.
-	[[ ${lines[0]} == alpha$'\t'"${DIM}someone/${RESET}${BOLD}alpha${RESET} "*"not installed"* ]]
-	[[ ${lines[1]} == beta$'\t'"${DIM}someone/${RESET}${BOLD}beta${RESET} "*"not installed"* ]]
-	[[ ${lines[2]} == delta$'\t'"https://gitlab.com/someone/delta.git "*"not installed"* ]]
-	[[ ${lines[3]} == gamma$'\t'"${DIM}someone/${RESET}${BOLD}gamma${RESET} "*"not installed"* ]]
-	[[ ${lines[4]} == orphan$'\t'"${BOLD}orphan${RESET} "*"not declared"* ]]
-	[[ ${lines[5]} == tpm$'\t'"${DIM}tmux-plugins/${RESET}${BOLD}tpm${RESET} "* ]]
-	# Without the escapes, every status starts two columns after the longest
-	# name.
+	[[ ${lines[1]} == alpha$'\t'"${DIM}someone/${RESET}${BOLD}alpha${RESET} "*"not installed"* ]]
+	[[ ${lines[2]} == beta$'\t'"${DIM}someone/${RESET}${BOLD}beta${RESET} "*"not installed"* ]]
+	[[ ${lines[3]} == delta$'\t'"https://gitlab.com/someone/delta.git "*"not installed"* ]]
+	[[ ${lines[4]} == gamma$'\t'"${DIM}someone/${RESET}${BOLD}gamma${RESET} "*"not installed"* ]]
+	[[ ${lines[5]} == orphan$'\t'"${BOLD}orphan${RESET} "*"not declared"* ]]
+	[[ ${lines[6]} == tpm$'\t'"${DIM}tmux-plugins/${RESET}${BOLD}tpm${RESET} "* ]]
+	# Without the escapes, the column header and every row start their
+	# status two columns after the longest name, and their last column 16
+	# columns later.
 	local i visible expected longest=https://gitlab.com/someone/delta.git
-	local -a names=(someone/alpha someone/beta "$longest" someone/gamma orphan tmux-plugins/tpm)
+	local -a names=(plugin someone/alpha someone/beta "$longest" someone/gamma orphan tmux-plugins/tpm)
+	local -a lasts=("installed commit" - - - - - -)
 	for i in "${!lines[@]}"; do
 		visible=$(printf '%s' "${lines[i]#*$'\t'}" | sed $'s/\033\\[[0-9;]*m//g')
 		printf -v expected '%-*s' $((${#longest} + 2)) "${names[i]}"
 		[ "${visible:0:${#expected}}" = "$expected" ]
 		[[ ${visible:${#expected}:1} != ' ' ]]
+		[ "${visible:${#expected}+16}" = "${lasts[i]}" ]
 	done
+}
+
+@test "rows start with a dim column header without a key, aligned with a long name" {
+	declare_plugin someone/alpha
+	declare_plugin https://gitlab.com/someone/a-plugin-with-a-rather-long-name.git
+	run "$TPP_ROOT/scripts/panel.sh" rows
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 3 ]
+	local pad long=https://gitlab.com/someone/a-plugin-with-a-rather-long-name.git
+	printf -v pad '%*s' $((${#long} + 2 - 6)) ''
+	[ "${lines[0]}" = $'\t'"${DIM}plugin${pad}status          installed commit${RESET}" ]
 }
 
 @test "panel.sh preview is titled with the list's name, styled the same" {
