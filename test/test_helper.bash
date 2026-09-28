@@ -27,6 +27,13 @@ tpp_setup() {
 	TEST_SOCKET="tpp-test-$$-$RANDOM"
 
 	unset TMUX TMUX_PANE TMUX_PLUGIN_MANAGER_PATH GIT_SSH GIT_SSH_COMMAND
+	# A fixed English locale, so the tests' English expectations hold on any
+	# machine: the panel speaks the language of LC_ALL, LC_MESSAGES or LANG,
+	# and git words its relative dates by them and by LANGUAGE (which C
+	# overrides). C.UTF-8 rather than C, so bash counts the characters of
+	# "✓" or "checking…", not their bytes.
+	unset LANG LANGUAGE LC_MESSAGES
+	export LC_ALL=C.UTF-8
 	export TMUX_TMPDIR="$SOCKET_ROOT"
 	# Temporary files of the code under test (mktemp) land in the test's
 	# directory, so teardown removes them even when a test kills the code
