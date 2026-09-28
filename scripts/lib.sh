@@ -354,27 +354,51 @@ tpp_display_name() {
 	printf '%s\n' "$spec"
 }
 
+# tpp_label <name> <spec>: the name the list and the preview show for the
+# plugin in directory <name>: tpp_display_name of its declaration, or <name>
+# itself when there is no declaration (empty <spec>).
+tpp_label() {
+	if [[ -n $2 ]]; then
+		tpp_display_name "$2"
+	else
+		printf '%s\n' "$1"
+	fi
+}
+
+# tpp_style_label <label> <spec>: <label> from tpp_label with ANSI styles:
+# owner/repo with "owner/" dim and "repo" bold; the directory name of a
+# plugin without a declaration (empty <spec>) bold; any other URL plain.
+tpp_style_label() {
+	local label=$1
+	if [[ -z $2 ]]; then
+		printf '\033[1m%s\033[0m\n' "$label"
+	elif [[ $label =~ ^([A-Za-z0-9_.-]+/)([A-Za-z0-9_.-]+)$ ]]; then
+		printf '\033[2m%s\033[0m\033[1m%s\033[0m\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+	else
+		printf '%s\n' "$label"
+	fi
+}
+
 # Turns records from tpp_collect into fzf rows: "name<TAB>display". The
-# display starts with the declaration's tpp_display_name, or the directory
-# name for a directory without a declaration.
+# display starts with the styled tpp_label; the column is padded to the
+# widest label as shown, without its escape codes.
 tpp_format_rows() {
-	local -a names shown statuses ages
+	local -a names labels label_widths statuses ages
 	local name status age spec _source label width=10 i pad
 	while IFS=$'\t' read -r name status age spec _source; do
 		[[ -n $name ]] || continue
-		label=$name
-		[[ -n $spec ]] && label=$(tpp_display_name "$spec")
+		label=$(tpp_label "$name" "$spec")
 		names+=("$name")
-		shown+=("$label")
+		labels+=("$(tpp_style_label "$label" "$spec")")
+		label_widths+=("${#label}")
 		statuses+=("$status")
 		ages+=("$age")
 		((${#label} > width)) && width=${#label}
 	done
 	for i in "${!names[@]}"; do
-		label=${shown[i]}
 		status=${statuses[i]}
-		printf -v pad '%*s' $((width - ${#label} + 2)) ''
-		printf '%s\t%s%s%s' "${names[i]}" "$label" "$pad" "$(tpp_status_color "$status")"
+		printf -v pad '%*s' $((width - label_widths[i] + 2)) ''
+		printf '%s\t%s%s%s' "${names[i]}" "${labels[i]}" "$pad" "$(tpp_status_color "$status")"
 		printf -v pad '%*s' $((16 - ${#status})) ''
 		printf '%s\033[0m%s\033[2m%s\033[0m\n' "$status" "$pad" "${ages[i]}"
 	done
@@ -551,7 +575,7 @@ tpp_preview() {
 		spec=${decl%%$'\t'*}
 		source=${decl#*$'\t'}
 	fi
-	printf '%s\n\n' "$name"
+	printf '%s\n\n' "$(tpp_style_label "$(tpp_label "$name" "$spec")" "$spec")"
 	if [[ -n $spec ]]; then
 		printf 'declared  %s\n' "$spec"
 		printf 'in        %s\n' "$source"

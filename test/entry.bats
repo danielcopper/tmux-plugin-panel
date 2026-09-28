@@ -2,6 +2,9 @@
 
 bats_require_minimum_version 1.5.0
 
+# The styles of a name in the list and the preview title.
+DIM=$'\033[2m' BOLD=$'\033[1m' RESET=$'\033[0m'
+
 setup() {
 	load test_helper
 	tpp_setup
@@ -60,7 +63,7 @@ binding_of() {
 	[ "$status" -eq 0 ]
 	[ "${#lines[@]}" -eq 2 ]
 	[[ ${lines[0]} == alpha$'\t'"$(remote_url alpha) "*✓* ]]
-	[[ ${lines[1]} == missing$'\t'"someone/missing "*"not installed"* ]]
+	[[ ${lines[1]} == missing$'\t'"${DIM}someone/${RESET}${BOLD}missing${RESET} "*"not installed"* ]]
 }
 
 @test "rows keep their columns when a record has no age" {
@@ -71,7 +74,7 @@ binding_of() {
 	run bash -c 'source "$1/scripts/lib.sh"; tpp_init; tpp_collect_checking | tpp_format_rows' _ "$TPP_ROOT"
 	[ "$status" -eq 0 ]
 	[[ $output != *"$PANEL_FILE"* ]]
-	[[ ${lines[1]} == missing$'\t'"someone/missing "*"not installed"*$'\033[2m-\033[0m' ]]
+	[[ ${lines[1]} == missing$'\t'"${DIM}someone/${RESET}${BOLD}missing${RESET} "*"not installed"*$'\033[2m-\033[0m' ]]
 }
 
 @test "panel.sh preview lists pending commits" {
@@ -117,19 +120,39 @@ binding_of() {
 	run "$TPP_ROOT/scripts/panel.sh" rows
 	[ "$status" -eq 0 ]
 	[ "${#lines[@]}" -eq 6 ]
-	[[ ${lines[0]} == alpha$'\t'"someone/alpha "*"not installed"* ]]
-	[[ ${lines[1]} == beta$'\t'"someone/beta "*"not installed"* ]]
+	# owner/repo: the owner dim, the repo bold; a directory without a
+	# declaration: bold; any other URL: plain.
+	[[ ${lines[0]} == alpha$'\t'"${DIM}someone/${RESET}${BOLD}alpha${RESET} "*"not installed"* ]]
+	[[ ${lines[1]} == beta$'\t'"${DIM}someone/${RESET}${BOLD}beta${RESET} "*"not installed"* ]]
 	[[ ${lines[2]} == delta$'\t'"https://gitlab.com/someone/delta.git "*"not installed"* ]]
-	[[ ${lines[3]} == gamma$'\t'"someone/gamma "*"not installed"* ]]
-	[[ ${lines[4]} == orphan$'\t'"orphan "*"not declared"* ]]
-	[[ ${lines[5]} == tpm$'\t'"tmux-plugins/tpm "* ]]
-	# The status column starts two columns after the longest name.
-	local line shown longest=https://gitlab.com/someone/delta.git
-	for line in "${lines[@]}"; do
-		shown=${line#*$'\t'}
-		shown=${shown%%$'\033'*}
-		[ "${#shown}" -eq $((${#longest} + 2)) ]
+	[[ ${lines[3]} == gamma$'\t'"${DIM}someone/${RESET}${BOLD}gamma${RESET} "*"not installed"* ]]
+	[[ ${lines[4]} == orphan$'\t'"${BOLD}orphan${RESET} "*"not declared"* ]]
+	[[ ${lines[5]} == tpm$'\t'"${DIM}tmux-plugins/${RESET}${BOLD}tpm${RESET} "* ]]
+	# Without the escapes, every status starts two columns after the longest
+	# name.
+	local i visible expected longest=https://gitlab.com/someone/delta.git
+	local -a names=(someone/alpha someone/beta "$longest" someone/gamma orphan tmux-plugins/tpm)
+	for i in "${!lines[@]}"; do
+		visible=$(printf '%s' "${lines[i]#*$'\t'}" | sed $'s/\033\\[[0-9;]*m//g')
+		printf -v expected '%-*s' $((${#longest} + 2)) "${names[i]}"
+		[ "${visible:0:${#expected}}" = "$expected" ]
+		[[ ${visible:${#expected}:1} != ' ' ]]
 	done
+}
+
+@test "panel.sh preview is titled with the list's name, styled the same" {
+	declare_plugin "someone/alpha#dev"
+	declare_plugin https://gitlab.com/someone/beta.git
+	mkdir -p "$PLUGIN_DIR/orphan"
+	run "$TPP_ROOT/scripts/panel.sh" preview alpha
+	[ "$status" -eq 0 ]
+	[ "${lines[0]}" = "${DIM}someone/${RESET}${BOLD}alpha${RESET}" ]
+	run "$TPP_ROOT/scripts/panel.sh" preview beta
+	[ "$status" -eq 0 ]
+	[ "${lines[0]}" = https://gitlab.com/someone/beta.git ]
+	run "$TPP_ROOT/scripts/panel.sh" preview orphan
+	[ "$status" -eq 0 ]
+	[ "${lines[0]}" = "${BOLD}orphan${RESET}" ]
 }
 
 @test "panel.sh preview shows TPM's clone URL without its git::@ userinfo" {
