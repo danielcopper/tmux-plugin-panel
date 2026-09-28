@@ -38,6 +38,21 @@ alive() {
 	return 0
 }
 
+# write_spin: writes $TEST_ROOT/spin <command> [<arg>...], which runs the
+# command behind tpp_spin with its output in $TEST_ROOT/log, then prints the
+# status, and "no children" when the shell has no child process left: neither
+# the command nor the spinner.
+write_spin() {
+	cat >"$TEST_ROOT/spin" <<EOF2
+#!/usr/bin/env bash
+source "$TPP_ROOT/scripts/lib.sh"
+tpp_spin Working "$TEST_ROOT/log" "\$@"
+echo "status \$?"
+pgrep -P \$\$ || echo "no children"
+EOF2
+	chmod +x "$TEST_ROOT/spin"
+}
+
 @test "the spinner shows its message while the command runs, then clears its line" {
 	load_lib
 	run tpp_spin "Working" "$TEST_ROOT/log" bash -c 'echo out; echo err >&2; sleep 0.3'
@@ -55,15 +70,18 @@ sleep 0.2
 exit 3
 EOF2
 	chmod +x "$TEST_ROOT/fail"
-	load_lib
-	run tpp_spin "Working" "$TEST_ROOT/log" "$TEST_ROOT/fail" "$TEST_ROOT"
-	[ "$status" -eq 3 ]
-	[[ $output == *$'\r\033[K' ]]
+	write_spin
+	# A spinner left running would make tpp_spin wait for ever: the timeout
+	# turns that into a failure.
+	run timeout 20 "$TEST_ROOT/spin" "$TEST_ROOT/fail" "$TEST_ROOT"
+	[ "$status" -eq 0 ]
+	[[ $output == $'\r'"Working ⠋"*$'\r\033[K'"status 3"$'\n'"no children" ]]
 	[ -z "$(alive "$TEST_ROOT/pids")" ]
 }
 
-@test "Ctrl-C stops the spinner, the command and everything it started" {
-	# The command starts two more processes and records all three.
+@test "Ctrl-C stops the command and everything it started, then the spinner" {
+	# The command starts two more processes and records all three, itself
+	# last.
 	cat >"$TEST_ROOT/busy" <<'EOF2'
 #!/usr/bin/env bash
 sleep 300 &
@@ -74,13 +92,11 @@ echo $$ >>"$1/pids"
 wait
 EOF2
 	chmod +x "$TEST_ROOT/busy"
-	# A terminal sends Ctrl-C's SIGINT to its foreground process group: the
-	# spinner runs in a process group of its own here (set -m), so that it
-	# can be sent the same way. Without it the shell would start the
-	# background job with SIGINT ignored.
+	# Started with job control (set -m), so that the shell does not start it
+	# with SIGINT ignored, which the command would inherit.
+	write_spin
 	set -m
-	bash -c 'source "$1/scripts/lib.sh"; tpp_spin Working "$2/log" "$2/busy" "$2"; echo "status $?"' \
-		_ "$TPP_ROOT" "$TEST_ROOT" >"$TEST_ROOT/out" 2>&1 3>&- &
+	"$TEST_ROOT/spin" "$TEST_ROOT/busy" "$TEST_ROOT" >"$TEST_ROOT/out" 2>&1 3>&- &
 	local pid=$!
 	set +m
 	for _ in $(seq 50); do
@@ -88,7 +104,9 @@ EOF2
 		sleep 0.1
 	done
 	[ "$(alive "$TEST_ROOT/pids" | wc -l)" -eq 3 ]
-	kill -INT -- "-$pid"
+	# Ctrl-C: the terminal sends SIGINT to its foreground process group,
+	# which is the command's own, led by the command.
+	kill -INT -- "-$(tail -n 1 "$TEST_ROOT/pids")"
 	for _ in $(seq 50); do
 		kill -0 "$pid" 2>/dev/null || break
 		sleep 0.1
@@ -98,7 +116,41 @@ EOF2
 	[ -z "$(alive "$TEST_ROOT/pids")" ]
 	run cat "$TEST_ROOT/out"
 	[[ $output == $'\r'"Working "* ]]
-	[[ $output == *$'\r\033[K'"status 130" ]]
+	[[ $output == *$'\r\033[K'"status 130"$'\n'"no children" ]]
+}
+
+@test "a command behind the spinner can read from the terminal; the spinner pauses while echo is off" {
+	# Asks for a passphrase the way ssh does: echo off, a prompt and a read
+	# on the terminal.
+	cat >"$TEST_ROOT/ask" <<'EOF2'
+#!/usr/bin/env bash
+sleep 0.3
+stty -echo </dev/tty
+sleep 0.3
+printf '[asking]' >/dev/tty
+read -r answer </dev/tty
+sleep 0.5
+printf '[answered]' >/dev/tty
+stty echo </dev/tty
+echo "got $answer"
+EOF2
+	chmod +x "$TEST_ROOT/ask"
+	write_spin
+	local cmd
+	printf -v cmd '%q ' "$TEST_ROOT/spin" "$TEST_ROOT/ask"
+	# A command that cannot read the terminal would wait forever: the
+	# timeout makes that a failure.
+	run bash -c 'printf "secret\r" | SHELL=/bin/bash timeout 20 script -qec "$1" /dev/null' _ "$cmd"
+	[ "$status" -eq 0 ]
+	[[ $output == *"status 0"* ]]
+	[ "$(cat "$TEST_ROOT/log")" = "got secret" ]
+	# Between the prompt and the answer the spinner drew nothing, though it
+	# did before: every frame after the first starts with ESC 7.
+	local asking=${output#*\[asking\]}
+	asking=${asking%%\[answered\]*}
+	[[ $output == *"[asking]"*"[answered]"* ]]
+	[[ $asking != *$'\0337'* ]]
+	[[ $output == *$'\0337'* ]]
 }
 
 # slow_tpm <script>: makes TPM's bin/<script> take a moment, so that the

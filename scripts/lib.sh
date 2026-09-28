@@ -723,30 +723,53 @@ tpp_preview() {
 	fi
 }
 
-# tpp_spin <message> <log> <command> [<arg>...]: runs <command> with its
-# output (stdout and stderr) in the file <log> and stdin from /dev/null, and
-# shows "<message> ⠋" with a turning spinner until it exits; then clears the
-# line. Returns the command's exit status. The command runs in a process
-# group of its own, so that Ctrl-C (or SIGTERM, SIGHUP) stops it and every
-# process it started, and then returns 130.
-tpp_spin() {
-	local message=$1 log=$2 pid rc i=0 stop=0 monitor=0
-	shift 2
-	[[ $- == *m* ]] && monitor=1
-	set -m
-	"$@" </dev/null >"$log" 2>&1 &
-	pid=$!
-	((monitor)) || set +m
-	trap 'stop=1' INT TERM HUP
-	while ((!stop)) && kill -0 "$pid" 2>/dev/null; do
-		printf '\r%s %s' "$message" "${TPP_SPINNER_FRAMES[i++ % ${#TPP_SPINNER_FRAMES[@]}]}"
-		sleep 0.1
+# tpp_spinner <message> <owner>: the spinner line of tpp_spin, run in the
+# background: "<message> ⠋", with the frame turning every 0.1 s until it is
+# killed or process <owner> is gone. It draws nothing while the terminal's
+# modes differ from those it started with: a program asking for a passphrase
+# (ssh) turns echo off while it waits for the answer. Every redraw saves and
+# restores the cursor (ESC 7, ESC 8), so a prompt printed on the spinner's
+# line keeps its cursor where the answer goes.
+tpp_spinner() {
+	local message=$1 owner=$2 modes i=1
+	modes=$(stty -g 2>/dev/null </dev/tty)
+	printf '\r%s %s' "$message" "${TPP_SPINNER_FRAMES[0]}"
+	while sleep 0.1 && kill -0 "$owner" 2>/dev/null; do
+		[[ $(stty -g 2>/dev/null </dev/tty) == "$modes" ]] || continue
+		printf '\0337\r%s %s\0338' "$message" "${TPP_SPINNER_FRAMES[i++ % ${#TPP_SPINNER_FRAMES[@]}]}" ||
+			return 0
 	done
-	((stop)) && kill -TERM -- "-$pid" 2>/dev/null
-	wait "$pid"
+}
+
+# tpp_spin <message> <log> <command> [<arg>...]: runs <command> in the
+# foreground with its output (stdout and stderr) in the file <log>, while
+# tpp_spinner shows "<message> ⠋" in the background; then clears the line.
+# Returns the command's exit status.
+#
+# The command gets a process group of its own, which a child shell with job
+# control (set -m) makes the terminal's foreground group, as an interactive
+# shell does: a prompt the command shows on the terminal (ssh asking for a
+# passphrase) can read the answer, and Ctrl-C reaches the command's group
+# only. The child shell is needed because bash, with job control on, answers
+# a foreground job killed by Ctrl-C by interrupting itself. Whatever is left
+# in the group afterwards (TPM's background jobs ignore SIGINT) is stopped
+# with SIGTERM.
+tpp_spin() {
+	local message=$1 log=$2 group spinner rc
+	shift 2
+	group=$(mktemp) || return 1
+	tpp_spinner "$message" "$BASHPID" &
+	spinner=$!
+	bash -c 'set -m; log=$1; shift; "$@" >"$log" 2>&1 & echo "$!" >"$0"; fg %% >/dev/null' \
+		"$group" "$log" "$@"
 	rc=$?
-	trap - INT TERM HUP
+	if [[ -s $group ]]; then
+		kill -TERM -- "-$(<"$group")" 2>/dev/null
+		kill -CONT -- "-$(<"$group")" 2>/dev/null
+	fi
+	rm -f "$group"
+	kill "$spinner" 2>/dev/null
+	wait "$spinner" 2>/dev/null
 	printf '\r\033[K'
-	((stop)) && return 130
 	return "$rc"
 }

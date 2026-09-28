@@ -70,6 +70,8 @@ available.
 | `q` or `esc`        | close the panel                                                                                         |
 
 While TPM installs, updates or cleans, a spinner shows; `ctrl-c` stops TPM.
+A prompt on the terminal, such as ssh asking for a key's passphrase, can be
+answered while the spinner runs.
 After every change the panel reloads your tmux config and refreshes the list.
 An update ends with one line per plugin: its old and new commit,
 `already up to date`, or `update failed`, and below them TPM's output when an
