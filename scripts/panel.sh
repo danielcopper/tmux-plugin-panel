@@ -196,6 +196,13 @@ main() {
 	fi
 	tpp_init || exit 1
 	case $cmd in
+	# The actions write to the terminal themselves: fzf before 0.53 gives an
+	# execute'd command fzf's own stdout, which run_ui sends to /dev/null.
+	# Here, and not in the bindings, because fzf runs a binding's command
+	# with the user's $SHELL, which need not understand a redirection.
+	update | install | clean | add | remove) exec >/dev/tty 2>&1 ;;
+	esac
+	case $cmd in
 	rows)
 		[[ ${1-} == --fetch ]] && tpp_fetch_all
 		tpp_collect | tpp_format_rows
