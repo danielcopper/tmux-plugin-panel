@@ -258,6 +258,23 @@ EOF2
 	[ ! -e "$PLUGIN_DIR/orphan" ]
 }
 
+@test "clean takes a yes in capitals: Y and YES" {
+	local panel answer
+	panel=$(printf '%q' "$TPP_ROOT/scripts/panel.sh")
+	for answer in Y YES; do
+		mkdir -p "$PLUGIN_DIR/orphan"
+		# The answer and enter answer the question, x is the key for "Press
+		# any key".
+		run bash -c 'printf "%s\rx" "$2" | SHELL=/bin/bash timeout 30 script -qec "$1 clean" /dev/null' _ "$panel" "$answer"
+		[ "$status" -eq 0 ]
+		[[ $output == *"Let TPM remove them? [y/N]"*'"orphan" clean success'* ]]
+		[ ! -e "$PLUGIN_DIR/orphan" ] || {
+			echo "the answer $answer did not confirm"
+			return 1
+		}
+	done
+}
+
 @test "add runs TPM's install behind a spinner, then shows TPM's output" {
 	make_remote alpha
 	slow_tpm install_plugins

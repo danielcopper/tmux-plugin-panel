@@ -235,6 +235,26 @@ j/k bewegen · J/K Vorschau scrollen · ctrl-d/ctrl-u Vorschau um eine halbe Sei
 	[ ! -e "$PLUGIN_DIR/orphan" ]
 }
 
+@test "a German confirmation takes JA in capitals" {
+	mkdir -p "$PLUGIN_DIR/orphan"
+	local panel
+	panel=$(printf '%q' "$TPP_ROOT/scripts/panel.sh")
+	run bash -c 'printf "JA\rx" | SHELL=/bin/bash timeout 30 script -qec "$1 $2 clean" /dev/null' _ "$GERMAN_ENV" "$panel"
+	[ "$status" -eq 0 ]
+	[[ $output == *"Von TPM entfernen lassen? [j/N]"*'"orphan" clean success'* ]]
+	[ ! -e "$PLUGIN_DIR/orphan" ]
+}
+
+@test "the missing-commands error is singular for one command, plural for two" {
+	run bash -c 'source "$1/scripts/lib.sh" && tpp_msg_missing_commands git && echo && tpp_msg_missing_commands git fzf' _ "$TPP_ROOT"
+	[ "$status" -eq 0 ]
+	[ "$output" = $'missing required command: git\nmissing required commands: git fzf' ]
+	unset LC_ALL
+	LANG=de_DE.UTF-8 run bash -c 'source "$1/scripts/lib.sh" && tpp_msg_missing_commands git && echo && tpp_msg_missing_commands git fzf' _ "$TPP_ROOT"
+	[ "$status" -eq 0 ]
+	[ "$output" = $'benötigter Befehl fehlt: git\nbenötigte Befehle fehlen: git fzf' ]
+}
+
 # age_under <VAR>=<value>...: the age column tpp_collect gives for the only
 # plugin, with LC_ALL unset and these variables set.
 age_under() {
