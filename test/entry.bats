@@ -188,3 +188,33 @@ binding_of() {
 	[ "$status" -eq 0 ]
 	[[ $output == *"repo      https://git::@example.com/x"$'\n'* ]]
 }
+
+@test "the panel runs fzf with exactly one header line, so the column header is never an item" {
+	# A fake fzf on PATH, like the tmux shim: answers the version check and
+	# records the arguments of the list's invocation, one per line.
+	cat >"$TEST_ROOT/bin/fzf" <<EOF
+#!/usr/bin/env bash
+[[ \$1 == --version ]] && { echo "0.36.0 (fake)"; exit 0; }
+printf '%s\n' "\$@" >"$TEST_ROOT/fzf-argv"
+cat >/dev/null
+EOF
+	chmod +x "$TEST_ROOT/bin/fzf"
+	run "$TPP_ROOT/scripts/panel.sh"
+	[ "$status" -eq 0 ]
+	local -a argv
+	mapfile -t argv <"$TEST_ROOT/fzf-argv"
+	local i found=0
+	for i in "${!argv[@]}"; do
+		case ${argv[i]} in
+		--header-lines)
+			[ "${argv[i + 1]}" = 1 ]
+			found=$((found + 1))
+			;;
+		--header-lines=*)
+			[ "${argv[i]#*=}" = 1 ]
+			found=$((found + 1))
+			;;
+		esac
+	done
+	[ "$found" -eq 1 ]
+}
