@@ -609,10 +609,12 @@ tpp_head() {
 	tpp_git "$1" rev-parse -q --verify HEAD
 }
 
-# tpp_update_heads <all|name...>: prints "name<TAB>head<TAB>spec" for every
-# plugin that TPM's update_plugins with the same arguments acts on, sorted by
-# name. For "all": every declared plugin whose directory is a git checkout
-# (TPM's update of all plugins skips the others). Otherwise: the named ones,
+# tpp_update_heads <all|name...>: prints "name<TAB>head<TAB>spec" for the
+# plugins an update with the same arguments reports on, sorted by name. For
+# "all": every declared plugin whose directory is a git checkout (TPM's
+# update of all plugins skips a directory where `git remote` fails; outside
+# an enclosing repository that is the same set, and tpp_update_summary shows
+# TPM's output for a failed one it does not list). Otherwise: the named ones,
 # each with head "-" when it has no commit (no directory, or not a git
 # checkout). head is the commit checked out; spec is the first declaration
 # of the plugin, empty when there is none. Unlike tpp_collect it reads no
@@ -749,7 +751,8 @@ tpp_preview() {
 # a program asking for a passphrase (ssh) turns echo off while it waits for
 # the answer. Every redraw saves and restores the cursor (ESC 7, ESC 8), so a
 # prompt printed on the spinner's line keeps its cursor where the answer
-# goes. Without a terminal (no /dev/tty at the start) it only draws.
+# goes. Without a terminal at the start (no /dev/tty), it draws every frame
+# and does not check the terminal's modes.
 tpp_spinner() {
 	local message=$1 owner=$2 modes now i=1
 	modes=$(stty -g 2>/dev/null </dev/tty)
