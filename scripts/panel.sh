@@ -188,6 +188,7 @@ run_ui() {
 main() {
 	local cmd=${1-ui}
 	(($#)) && shift
+	tpp_disable_credential_helpers
 	if [[ $cmd == ui ]]; then
 		check_dependencies
 		tpp_init || fail_and_exit "cannot start"

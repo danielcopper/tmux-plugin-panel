@@ -143,3 +143,10 @@ load_lib() {
 status_of() {
 	tpp_collect | awk -F '\t' -v n="$1" '$1 == n { print $2 }'
 }
+
+# on_terminal <command>: runs the shell command <command> on a terminal of its
+# own (a pty from util-linux script) and prints what the terminal showed. The
+# terminal gets one key press as input, for the panel's "Press any key".
+on_terminal() {
+	printf x | SHELL=/bin/bash script -qec "$1" /dev/null
+}

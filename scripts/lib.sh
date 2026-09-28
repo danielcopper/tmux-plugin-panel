@@ -167,6 +167,28 @@ tpp_declared_outside_panel_file() {
 	return 1
 }
 
+# Runs every git process started from here on without credential helpers,
+# the panel's own and those of TPM's scripts: an empty credential.helper
+# clears the list of helpers. TPM clones GitHub plugins from
+# https://git::@github.com/owner/repo, and after a pull git hands those
+# empty credentials to the user's helpers to store; some (libsecret, KWallet)
+# print an error for them. The setting is appended to the entries already in
+# GIT_CONFIG_COUNT, and added once. GIT_CONFIG_COUNT needs git 2.31; older
+# git ignores it. A GIT_CONFIG_COUNT that is not a number is left alone, git
+# refuses to run with it anyway.
+tpp_disable_credential_helpers() {
+	local count=${GIT_CONFIG_COUNT:-0} key value
+	[[ $count =~ ^[0-9]+$ ]] || return 0
+	count=$((10#$count))
+	if ((count > 0)); then
+		key=GIT_CONFIG_KEY_$((count - 1))
+		value=GIT_CONFIG_VALUE_$((count - 1))
+		[[ ${!key-} == credential.helper && -z ${!value-} ]] && return 0
+	fi
+	export "GIT_CONFIG_KEY_$count=credential.helper" "GIT_CONFIG_VALUE_$count=" \
+		"GIT_CONFIG_COUNT=$((count + 1))"
+}
+
 tpp_git() {
 	local dir=$1
 	shift

@@ -143,6 +143,12 @@ panel refuses to write when `@tmux-plugin-panel-file` points at your
   plugin's directory.
 - **Status**: the panel's own; it runs `git fetch` and compares with the
   upstream branch using git plumbing commands.
+- **Credential helpers**: every git command the panel starts, its own and
+  those of TPM's scripts, runs without credential helpers (an empty
+  `credential.helper`, added to the environment through `GIT_CONFIG_COUNT`,
+  which needs git 2.31). TPM clones GitHub plugins from URLs with empty
+  credentials in them, which git would otherwise hand to your helper to store
+  after every pull.
 
 ## Limitations
 
@@ -152,6 +158,9 @@ panel refuses to write when `@tmux-plugin-panel-file` points at your
 - `c` runs TPM's clean, and TPM decides what is removed: it keeps a directory
   whose name appears anywhere in the list of declared plugins.
 - TPM updates a plugin with `git pull`, which fails for a detached HEAD.
+- A plugin whose https remote needs credentials from a credential helper
+  cannot be fetched or updated from the panel. Remotes over ssh do not use
+  credential helpers and are not affected.
 - Without `timeout` or `gtimeout`, a remote that does not answer delays the
   list until git gives up.
 - Declarations are found the way TPM finds them: only files that your config
