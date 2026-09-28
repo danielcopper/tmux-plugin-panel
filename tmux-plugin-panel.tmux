@@ -9,7 +9,7 @@ source "$CURRENT_DIR/scripts/lib.sh"
 
 main() {
 	local key
-	if ! tpp_tmux_version_ok; then
+	if ! tpp_tmux_version_ok "$(tmux -V 2>/dev/null)"; then
 		tmux display-message "tmux-plugin-panel: tmux $TPP_MIN_TMUX or newer is required"
 		return 0
 	fi

@@ -107,13 +107,13 @@ teardown() {
 	[ "$output" = "$expected" ]
 }
 
-@test "--checking marks installed plugins as checking" {
+@test "the checking rows mark installed plugins as checking" {
 	clone_plugin alpha
 	declare_plugin "$(remote_url alpha)"
 	declare_plugin "someone/missing"
 	load_lib
-	[ "$(tpp_collect --checking | awk -F '\t' '$1 == "alpha" { print $2 }')" = "checking…" ]
-	[ "$(tpp_collect --checking | awk -F '\t' '$1 == "missing" { print $2 }')" = "not installed" ]
+	[ "$(tpp_collect_checking | awk -F '\t' '$1 == "alpha" { print $2 }')" = "checking…" ]
+	[ "$(tpp_collect_checking | awk -F '\t' '$1 == "missing" { print $2 }')" = "not installed" ]
 }
 
 @test "fetch runs ssh in batch mode, keeping a configured ssh command" {

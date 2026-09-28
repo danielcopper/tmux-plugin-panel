@@ -51,10 +51,10 @@ tpp_version_ge() {
 	return 0
 }
 
-# tpp_tmux_version_ok [<tmux -V output>]: true when tmux is new enough for
+# tpp_tmux_version_ok <tmux -V output>: true when tmux is new enough for
 # display-popup. Builds without a version number ("tmux master") pass.
 tpp_tmux_version_ok() {
-	local version="${1-$(tmux -V 2>/dev/null)}"
+	local version=$1
 	[[ $version =~ ([0-9]+\.[0-9]+) ]] || return 0
 	tpp_version_ge "${BASH_REMATCH[1]}" "$TPP_MIN_TMUX"
 }
@@ -268,12 +268,22 @@ tpp_fetch_all() {
 # Every declared plugin is listed once (the first declaration of a name wins),
 # and so is every directory in the plugin directory without a declaration,
 # as "not declared" (tpm itself is left out). age is "-" when unknown; spec
-# and source are empty for undeclared directories. With --checking, a
-# declared plugin that is installed gets "checking…" instead of a computed
-# status; the other rows are unchanged.
+# and source are empty for undeclared directories. tpp_collect_checking
+# prints the same rows without running git for the status: a declared plugin
+# that is installed gets "checking…" (shown while the fetch runs); the other
+# rows are unchanged.
 tpp_collect() {
+	tpp_collect_records status
+}
+
+tpp_collect_checking() {
+	tpp_collect_records checking
+}
+
+# tpp_collect_records <status|checking>: the implementation of both.
+tpp_collect_records() {
 	local checking=0 decls spec source name dir status age
-	[[ ${1-} == --checking ]] && checking=1
+	[[ $1 == checking ]] && checking=1
 	decls=$(tpp_declarations)
 	{
 		local seen=$'\n'

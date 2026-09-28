@@ -84,7 +84,7 @@ cmd_install() {
 cmd_clean() {
 	local undeclared
 	clear_screen
-	undeclared=$(tpp_collect --checking | awk -F '\t' '$2 == "not declared" { print "  " $1 }')
+	undeclared=$(tpp_collect_checking | awk -F '\t' '$2 == "not declared" { print "  " $1 }')
 	if [[ -z $undeclared ]]; then
 		pause "Nothing to clean. Press any key to return to the list."
 		return
@@ -159,7 +159,7 @@ header() {
 run_ui() {
 	local self
 	self=$(printf '%q' "$SELF")
-	tpp_collect --checking | tpp_format_rows |
+	tpp_collect_checking | tpp_format_rows |
 		fzf --multi --ansi --no-sort --layout=reverse --disabled \
 			--delimiter $'\t' --with-nth 2.. \
 			--prompt '' --info hidden --header "$(header)" \

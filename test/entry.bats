@@ -68,7 +68,7 @@ binding_of() {
 	clone_plugin alpha
 	declare_plugin "$(remote_url alpha)"
 	declare_plugin "someone/missing"
-	run bash -c 'source "$1/scripts/lib.sh"; tpp_init; tpp_collect --checking | tpp_format_rows' _ "$TPP_ROOT"
+	run bash -c 'source "$1/scripts/lib.sh"; tpp_init; tpp_collect_checking | tpp_format_rows' _ "$TPP_ROOT"
 	[ "$status" -eq 0 ]
 	[[ $output != *file://* ]]
 	[[ $output != *someone/missing* ]]

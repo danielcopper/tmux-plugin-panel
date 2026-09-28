@@ -78,8 +78,9 @@ write_default_conf() {
 	} >"$TMUX_CONF"
 }
 
+# start_server <config>
 start_server() {
-	tmux -f "${1:-$TMUX_CONF}" new-session -d -s test -x 120 -y 40
+	tmux -f "$1" new-session -d -s test -x 120 -y 40
 }
 
 # Standard fixture: TPM installed, config written, server running.
@@ -87,7 +88,7 @@ standard_env() {
 	install_tpm
 	write_default_conf
 	touch "$PANEL_FILE"
-	start_server
+	start_server "$TMUX_CONF"
 }
 
 # make_remote <name>: creates a bare repository with one commit.
