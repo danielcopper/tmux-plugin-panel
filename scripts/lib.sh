@@ -14,6 +14,7 @@
 TPP_FETCH_TIMEOUT=10
 TPP_MIN_TMUX=3.2
 TPP_PLUGIN_LINE_RE='^[ \t]*set(-option)? +-g +@plugin'
+TPP_SPINNER_FRAMES=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 
 tpp_err() {
 	printf 'tmux-plugin-panel: %s\n' "$*" >&2
@@ -716,8 +717,6 @@ tpp_preview() {
 		printf '\nno pending commits\n'
 	fi
 }
-
-TPP_SPINNER_FRAMES=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 
 # tpp_spin <message> <log> <command> [<arg>...]: runs <command> with its
 # output (stdout and stderr) in the file <log> and stdin from /dev/null, and

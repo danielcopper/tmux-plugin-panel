@@ -118,6 +118,13 @@ EOF2
 	[[ $output != *gamma* ]]
 }
 
+@test "an update with no plugin to list shows TPM's output" {
+	rm -rf "$PLUGIN_DIR/alpha" "$PLUGIN_DIR/beta"
+	run update all
+	[ "$status" -eq 0 ]
+	[ "$output" = "Updating all plugins!" ]
+}
+
 @test "panel.sh update shows a spinner, then the summary" {
 	push_commit alpha
 	local panel old
