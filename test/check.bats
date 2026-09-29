@@ -312,6 +312,60 @@ j/k move · J/K scroll preview · ctrl-d/ctrl-u scroll preview by half a page" \
 	[[ $(row_of alpha) == *"wird geprüft "[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]* ]]
 }
 
+case_fetch_env() {
+	plugin alpha
+	load_lib
+	# What tpp_git adds to git's environment: the difference between the
+	# environments an alias sees when run through tpp_git and without it.
+	git -C "$PLUGIN_DIR/alpha" config alias.env '!env'
+	local added
+	added=$(comm -13 <(git -C "$PLUGIN_DIR/alpha" env | sort) <(tpp_git "$PLUGIN_DIR/alpha" env | sort))
+	[ -n "$added" ]
+	# The fetch's environment, as its remote side gets it. The fetch runs in
+	# a process of its own, as in the panel, which prints the command of the
+	# recorded process: a forked process shows as bash until it has started
+	# its command, a subshell running a function does for good (the remote
+	# side keeps the fetch running for a second).
+	git -C "$PLUGIN_DIR/alpha" config remote.origin.uploadpack \
+		"env >$TEST_ROOT/fetch-env; sleep 1; git-upload-pack"
+	cat >"$TEST_ROOT/fetch" <<EOF
+#!/usr/bin/env bash
+source "$TPP_ROOT/scripts/lib.sh"
+tpp_init
+tpp_fetch_start
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+	command=\$(ps -o comm= -p "\${TPP_FETCH_PIDS[0]}")
+	[[ \$command == bash ]] || break
+	sleep 0.05
+done
+echo "\${#TPP_FETCH_PIDS[@]} \$command"
+wait
+EOF
+	chmod +x "$TEST_ROOT/fetch"
+	local recorded
+	recorded=$("$TEST_ROOT/fetch")
+	[[ $recorded == "1 timeout" || $recorded == "1 git" ]] || {
+		echo "fetches and the recorded process: $recorded"
+		return 1
+	}
+	local line
+	while IFS= read -r line; do
+		grep -qxF -- "$line" "$TEST_ROOT/fetch-env" || {
+			echo "the fetch's environment lacks $line"
+			return 1
+		}
+	done <<<"$added"
+}
+
+@test "a fetch gets tpp_git's environment, and its recorded process is git or the timeout command" {
+	case_fetch_env
+}
+
+@test "a fetch gets tpp_git's environment, and its recorded process is git or the timeout command, also without timeout" {
+	without_timeout
+	case_fetch_env
+}
+
 case_sigterm() {
 	plugin alpha
 	plugin beta
