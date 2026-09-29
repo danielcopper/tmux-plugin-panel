@@ -175,3 +175,25 @@ EOF2
 	[[ $output == *"Updating 2 plugins ⠋"*$'\r\033[K'"${DIM}someone/${RESET}${BOLD}alpha${RESET}  $old → $(short alpha)"$'\r\n'"${DIM}someone/${RESET}${BOLD}beta${RESET}   already up to date"$'\r\n'* ]]
 	[[ $output != *"update success"* ]]
 }
+
+@test "panel.sh update speaks German under a German locale" {
+	push_commit alpha
+	local panel old
+	old=$(short alpha)
+	panel=$(printf '%q' "$TPP_ROOT/scripts/panel.sh")
+	run on_terminal "$GERMAN_ENV $panel update alpha beta"
+	[ "$status" -eq 0 ]
+	[[ $output == *"2 Plugins werden aktualisiert ⠋"*$'\r\033[K'"${DIM}someone/${RESET}${BOLD}alpha${RESET}  $old → $(short alpha)"$'\r\n'"${DIM}someone/${RESET}${BOLD}beta${RESET}   bereits aktuell"$'\r\n'* ]]
+	[[ $output == *"Beliebige Taste drücken, um zur Liste zurückzukehren."* ]]
+}
+
+@test "the update spinner names a single plugin in the singular" {
+	local panel
+	panel=$(printf '%q' "$TPP_ROOT/scripts/panel.sh")
+	run on_terminal "$panel update beta"
+	[ "$status" -eq 0 ]
+	[[ $output == *"Updating 1 plugin ⠋"* ]]
+	run on_terminal "$GERMAN_ENV $panel update beta"
+	[ "$status" -eq 0 ]
+	[[ $output == *"1 Plugin wird aktualisiert ⠋"*"bereits aktuell"* ]]
+}
