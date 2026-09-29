@@ -402,7 +402,7 @@ tpp_status_color() {
 }
 
 # tpp_status_text <status>: the text the list shows for a status from
-# tpp_collect: the counts (✓, ↑N, ↓M) as they are, the words in the panel's
+# tpp_collect: the symbols (✓, ↑N, ↓M) as they are, the words in the panel's
 # language.
 tpp_status_text() {
 	case $1 in

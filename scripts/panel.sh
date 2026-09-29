@@ -183,8 +183,9 @@ cmd_remove() {
 # hints <counts> <key> <action> [<key> <action>...]: the key hints, each
 # "<key> <action>", joined by " · " in lines of as many hints as the numbers
 # in <counts> say ("9 3": nine, then three). The hints left over after the
-# last number, or all of them for a number that is not above 0, share one
-# more line. The lines are separated by newlines, without one at the end.
+# last number share one more line; so do all the remaining hints from the
+# first entry that is not a whole number above 0 written without leading
+# zeros. The lines are separated by newlines, without one at the end.
 hints() {
 	local counts=$1 count line text='' newline=$'\n'
 	shift

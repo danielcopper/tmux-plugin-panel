@@ -5,11 +5,11 @@
 # first, then the catalogue of the panel's language, which redefines what it
 # translates; whatever it leaves out stays English.
 #
-# A catalogue defines the same names as this file: a TPP_MSG_* variable for a
-# fixed text, a tpp_msg_* function for a text with values, which it prints
-# without a final newline. A function takes its values as arguments and may
-# place them in any order. Key names (enter, ctrl-d, …) are not part of the
-# messages.
+# A shipped catalogue defines the same names as this file (a test checks it):
+# a TPP_MSG_* variable for a fixed text, a tpp_msg_* function for a text with
+# values, which it prints without a final newline. A function takes its
+# values as arguments and may place them in any order. Key names (enter,
+# ctrl-d, …) are not part of the messages.
 
 # The list's header: the key hints, as "<key> <action>", in the order of the
 # variables below. TPP_MSG_HINT_LINES says how many hints each line holds; the
@@ -33,7 +33,7 @@ tpp_msg_header() { printf 'plugins %s   file %s' "$1" "$2"; }
 tpp_msg_not_sourced() { printf '%s is not sourced from %s' "$1" "$2"; }
 
 # The list's columns and statuses. The status column is as wide as the
-# longest status word, plus two spaces.
+# longest status word or the column header, plus two spaces.
 TPP_MSG_COLUMN_PLUGIN='plugin'
 TPP_MSG_COLUMN_STATUS='status'
 TPP_MSG_COLUMN_AGE='installed commit'

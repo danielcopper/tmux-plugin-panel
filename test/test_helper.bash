@@ -156,8 +156,10 @@ status_of() {
 }
 
 # german <command> [<arg>...]: runs <command> with a German locale in LANG
-# and LC_ALL unset. LANG rather than LC_ALL: bash warns at start when LC_ALL
-# names a locale that is not installed, and de_DE.UTF-8 need not be. For a
+# and LC_ALL unset. LANG rather than LC_ALL: bash warns when LC_ALL names a
+# locale that is not installed, at start and when it is set, and so does a
+# running bash when LC_MESSAGES is set to one; it does not warn about LANG,
+# at start or when it is set. de_DE.UTF-8 need not be installed. For a
 # command line run by on_terminal, the same prefix is GERMAN_ENV.
 # shellcheck disable=SC2034 # used by the .bats files
 GERMAN_ENV='env -u LC_ALL LANG=de_DE.UTF-8'

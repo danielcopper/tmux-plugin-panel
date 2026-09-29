@@ -143,8 +143,9 @@ panel refuses to write when `@tmux-plugin-panel-file` points at your
 ## Language
 
 The panel speaks English and German. It takes the language from the first of
-`LC_ALL`, `LC_MESSAGES` and `LANG` that is set and not empty: `de_DE.UTF-8`
-is German. Any other language, `C` and `POSIX` are English.
+`LC_ALL`, `LC_MESSAGES` and `LANG` that is set and not empty: a locale whose
+language part is `de` (`de_DE.UTF-8`, `de_AT.UTF-8`, …) is German; any other
+language, `C` and `POSIX` are English. `LANGUAGE` is not read.
 
 The age in the last column is git's own wording, asked for in the panel's
 language; git words it in German when it has its German translation and the
@@ -209,8 +210,11 @@ another language.
 
 To add a language, copy `scripts/lang/en.sh` to `scripts/lang/<code>.sh`,
 where `<code>` is the language part of the locale (`fr` for `fr_FR.UTF-8`),
-and translate the messages; a test checks that the new file defines every
-message of `en.sh`.
+and translate the messages; a test checks that the new file defines exactly
+the messages of `en.sh`.
+
+Two tests of the age column need the `de_DE.UTF-8` and `en_US.UTF-8` locales
+and git's German translation, and skip without them.
 
 ## License
 

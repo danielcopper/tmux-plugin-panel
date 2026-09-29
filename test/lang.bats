@@ -39,8 +39,9 @@ messages_in() {
 }
 
 # lang_for [<VAR>=<value>...]: the language the panel picks when, of the
-# locale variables, only these are set. Its stderr is dropped: bash warns
-# there when LC_ALL or LC_MESSAGES names a locale this machine does not have.
+# locale variables, only these are set. Its stderr is dropped, where bash
+# may warn about a locale this machine does not have (see german in
+# test_helper.bash).
 lang_for() {
 	(
 		unset LC_ALL LC_MESSAGES LANG LANGUAGE
@@ -76,7 +77,7 @@ lang_for() {
 @test "a language without a catalogue falls back to English" {
 	[ "$(lang_for LANG=fr_FR.UTF-8)" = en ]
 	[ "$(lang_for LANG=../../de)" = en ]
-	# LANG, not LC_ALL: bash does not warn about a LANG it cannot set.
+	# LANG, not LC_ALL: see german in test_helper.bash.
 	unset LC_ALL
 	LANG=fr_FR.UTF-8 run bash -c 'source "$1/scripts/lib.sh" && printf "%s\n" "$TPP_MSG_STATUS_PINNED" "$(tpp_msg_removed alpha)"' _ "$TPP_ROOT"
 	[ "$status" -eq 0 ]
