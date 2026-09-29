@@ -316,16 +316,22 @@ j/k move · J/K scroll preview · ctrl-d/ctrl-u scroll preview by half a page" \
 case_fetch_env() {
 	plugin alpha
 	load_lib
-	# What tpp_git adds to git's environment: the difference between the
-	# environments an alias sees when run through tpp_git and without it.
+	# tpp_git and the fetches each set git's environment inline; this test
+	# fails when they drift apart. What tpp_git adds to git's environment:
+	# the difference between the environments an alias sees when run
+	# through tpp_git and without it.
 	git -C "$PLUGIN_DIR/alpha" config alias.env '!env'
 	local added
 	added=$(comm -13 <(git -C "$PLUGIN_DIR/alpha" env | sort) <(tpp_git "$PLUGIN_DIR/alpha" env | sort))
 	[ -n "$added" ]
+	# None of it stays in the caller's environment.
+	[ "$LC_ALL" = C.UTF-8 ]
+	[ -z "${GIT_TERMINAL_PROMPT+set}" ]
 	# The fetch's environment, as its remote side gets it. The fetch runs in
-	# a process of its own, as in the panel, which prints the command of the
-	# recorded process: a forked process shows as bash until it has started
-	# its command, a subshell running a function does for good (the remote
+	# a process of its own, as in the panel, with the panel's credential
+	# setting in its environment, and prints the command of the recorded
+	# process: a forked process shows as bash until it has started its
+	# command; a shell waiting for the command does for good (the remote
 	# side keeps the fetch running for a second).
 	git -C "$PLUGIN_DIR/alpha" config remote.origin.uploadpack \
 		"env >$TEST_ROOT/fetch-env; sleep 1; git-upload-pack"
@@ -333,6 +339,7 @@ case_fetch_env() {
 #!/usr/bin/env bash
 source "$TPP_ROOT/scripts/lib.sh"
 tpp_init
+tpp_disable_credential_helpers
 tpp_fetch_start
 for _ in 1 2 3 4 5 6 7 8 9 10; do
 	command=\$(ps -o comm= -p "\${TPP_FETCH_PIDS[0]}")
@@ -356,6 +363,8 @@ EOF
 			return 1
 		}
 	done <<<"$added"
+	# The rest of the environment reaches the fetch too.
+	grep -qxF "GIT_CONFIG_KEY_0=credential.https://git@github.com.helper" "$TEST_ROOT/fetch-env"
 }
 
 @test "a fetch gets tpp_git's environment, and its recorded process is git or the timeout command" {

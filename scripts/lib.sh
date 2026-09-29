@@ -224,21 +224,10 @@ tpp_disable_credential_helpers() {
 		"GIT_CONFIG_COUNT=$((count + 1))"
 }
 
-# tpp_git_exec <command> [<arg>...]: replaces the shell with <command>, run
-# with the environment the panel gives git: C messages, and no prompt for
-# credentials on the terminal. For a subshell or a background job only, as
-# the shell does not return; a background job started with it is <command>
-# itself, not a shell waiting for it.
-tpp_git_exec() {
-	export LC_ALL=C GIT_TERMINAL_PROMPT=0
-	exec "$@"
-}
-
-# tpp_git <dir> <arg>...: git in <dir> with the panel's git environment.
 tpp_git() {
 	local dir=$1
 	shift
-	(tpp_git_exec git -C "$dir" "$@")
+	LC_ALL=C GIT_TERMINAL_PROMPT=0 git -C "$dir" "$@"
 }
 
 # tpp_git_localized <dir> <arg>...: git for text the panel shows as git
@@ -345,10 +334,12 @@ tpp_fetch_start() {
 		tpp_is_git_checkout "$dir" || continue
 		ssh_cmd=$(tpp_ssh_command "$dir")
 		if [[ -n $timeout_cmd ]]; then
-			GIT_SSH_COMMAND=$ssh_cmd tpp_git_exec "$timeout_cmd" -k 2 "$TPP_FETCH_TIMEOUT" \
+			GIT_SSH_COMMAND=$ssh_cmd LC_ALL=C GIT_TERMINAL_PROMPT=0 \
+				"$timeout_cmd" -k 2 "$TPP_FETCH_TIMEOUT" \
 				git -C "$dir" fetch --quiet </dev/null >/dev/null 2>&1 &
 		else
-			GIT_SSH_COMMAND=$ssh_cmd tpp_git_exec git -C "$dir" fetch --quiet </dev/null >/dev/null 2>&1 &
+			GIT_SSH_COMMAND=$ssh_cmd LC_ALL=C GIT_TERMINAL_PROMPT=0 \
+				git -C "$dir" fetch --quiet </dev/null >/dev/null 2>&1 &
 		fi
 		TPP_FETCH_PIDS+=("$!")
 		dir=${dir%/}
