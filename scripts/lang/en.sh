@@ -43,6 +43,10 @@ TPP_MSG_STATUS_NOT_DECLARED='not declared'
 TPP_MSG_STATUS_PINNED='pinned'
 TPP_MSG_STATUS_NO_UPSTREAM='no upstream'
 TPP_MSG_STATUS_NOT_GIT='not a git repo'
+# tpp_msg_status_checking <frame>: the status of a plugin whose fetch runs,
+# followed by the spinner's current frame (with fzf 0.73 or newer; older fzf
+# shows TPP_MSG_STATUS_CHECKING).
+tpp_msg_status_checking() { printf 'checking %s' "$1"; }
 
 # The preview. The labels are aligned: their column is as wide as the
 # longest label, plus two spaces.

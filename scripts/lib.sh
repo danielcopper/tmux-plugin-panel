@@ -420,10 +420,13 @@ tpp_status_color() {
 
 # tpp_status_text <status>: the text the list shows for a status from
 # tpp_collect: the symbols (✓, ↑N, ↓M) as they are, the words in the panel's
-# language.
+# language. The frames of the check (fzf 0.73 and newer, see panel.sh) show
+# a plugin whose fetch runs as "checking <frame>", <frame> being the
+# spinner's current frame.
 tpp_status_text() {
 	case $1 in
 	"checking…") printf '%s\n' "$TPP_MSG_STATUS_CHECKING" ;;
+	"checking "*) printf '%s\n' "$(tpp_msg_status_checking "${1#checking }")" ;;
 	"not installed") printf '%s\n' "$TPP_MSG_STATUS_NOT_INSTALLED" ;;
 	"not declared") printf '%s\n' "$TPP_MSG_STATUS_NOT_DECLARED" ;;
 	pinned) printf '%s\n' "$TPP_MSG_STATUS_PINNED" ;;
@@ -441,7 +444,8 @@ tpp_status_text() {
 # checking rows give way to the real status.
 tpp_status_width() {
 	local text width=0
-	for text in "$TPP_MSG_COLUMN_STATUS" "$TPP_MSG_STATUS_CHECKING" "$TPP_MSG_STATUS_NOT_INSTALLED" \
+	for text in "$TPP_MSG_COLUMN_STATUS" "$TPP_MSG_STATUS_CHECKING" \
+		"$(tpp_msg_status_checking "${TPP_SPINNER_FRAMES[0]}")" "$TPP_MSG_STATUS_NOT_INSTALLED" \
 		"$TPP_MSG_STATUS_NOT_DECLARED" "$TPP_MSG_STATUS_PINNED" "$TPP_MSG_STATUS_NO_UPSTREAM" \
 		"$TPP_MSG_STATUS_NOT_GIT"; do
 		((${#text} > width)) && width=${#text}
