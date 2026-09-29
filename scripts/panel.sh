@@ -261,8 +261,8 @@ header() {
 #   checking        there while the list shows the check's frames
 #   records         the records of the rows fzf starts with, from run_ui
 #   fetched/<name>  there once the fetch of plugin <name> has ended
-#   preview/        the previews made while the list shows the frames (see
-#                   cmd_preview)
+#   preview/        the previews made while the list shows the frames, in
+#                   before/<name> and after/<name> (see preview_cache_file)
 
 # write_file <file> <text>: replaces <file> with <text> and a newline through
 # a temporary file renamed over it, so that a reader finds the old text or
@@ -387,7 +387,7 @@ start_check() {
 # is killed; its fetches then end at their timeout.
 stop_check() {
 	local dir=$1 pid='' tries=0
-	[[ -f $dir/pid ]] && pid=$(<"$dir/pid")
+	{ read -r pid <"$dir/pid"; } 2>/dev/null
 	if [[ -n $pid ]] && kill -TERM "$pid" 2>/dev/null; then
 		while kill -0 "$pid" 2>/dev/null && ((tries++ < 60)); do
 			sleep 0.05

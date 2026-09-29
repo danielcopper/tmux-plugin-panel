@@ -128,6 +128,8 @@ sleeping() {
 	[[ $(grep -c . "$TEST_ROOT/sleeps" 2>/dev/null) -eq $1 ]]
 }
 
+# final_action_written: true when the check has written its last action,
+# which loads the list's usual rows.
 final_action_written() {
 	[[ $(cat "$CHECK_DIR/action" 2>/dev/null) == *"reload-sync($SELF rows)"* ]]
 }
