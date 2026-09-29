@@ -464,8 +464,9 @@ run_ui() {
 		tpp_collect_checking >"$TPP_CHECK_DIR/records"
 		start_check "$TPP_CHECK_DIR"
 		# --id-nth keeps the marks (tab) across the frames' reloads.
-		# --no-track overrides a --track in FZF_DEFAULT_OPTS, which with
-		# --id-nth would block the input on every reload of a frame.
+		# --no-track: with --id-nth, --track (for example from
+		# FZF_DEFAULT_OPTS) can delay or drop keys while the frames reload
+		# (seen with fzf 0.74).
 		load=(--id-nth 1 --no-track --bind "every(0.1):transform(cat $(printf '%q' "$TPP_CHECK_DIR")/action)")
 		refresh="r:execute-silent($self recheck)+rebind(every(0.1))"
 	else

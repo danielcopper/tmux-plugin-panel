@@ -330,11 +330,11 @@ tpp_timeout_cmd() {
 # Starts a fetch of every git checkout in the plugin directory, all in
 # parallel in the background, and returns without waiting for them. Each
 # fetch is bounded by TPP_FETCH_TIMEOUT seconds when a timeout command is
-# available. Sets the
-# arrays TPP_FETCH_PIDS and TPP_FETCH_NAMES: TPP_FETCH_PIDS[i] is the process
-# of the fetch of the plugin in directory TPP_FETCH_NAMES[i]. The process is
-# the timeout command, which on SIGTERM passes the signal on to the fetch
-# and everything the fetch started, or without one git itself.
+# available. Sets the arrays TPP_FETCH_PIDS and TPP_FETCH_NAMES:
+# TPP_FETCH_PIDS[i] is the process of the fetch of the plugin in directory
+# TPP_FETCH_NAMES[i]. The process is the timeout command, which on SIGTERM
+# passes the signal on to the fetch and everything the fetch started, or
+# without one git itself.
 tpp_fetch_start() {
 	local dir timeout_cmd ssh_cmd
 	TPP_FETCH_PIDS=()
