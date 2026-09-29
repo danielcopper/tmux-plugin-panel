@@ -317,29 +317,54 @@ case_fetch_env() {
 	plugin alpha
 	load_lib
 	# tpp_git and the fetches each set git's environment inline; this test
-	# fails when they drift apart. What tpp_git adds to git's environment:
-	# the difference between the environments an alias sees when run
-	# through tpp_git and without it.
+	# fails when they drift apart: both must add exactly these variables to
+	# git's environment, the fetches also GIT_SSH_COMMAND.
+	local expected=$'GIT_TERMINAL_PROMPT=0\nLC_ALL=C'
+	# What tpp_git adds: the difference between the environments an alias
+	# sees when run through tpp_git and without it.
 	git -C "$PLUGIN_DIR/alpha" config alias.env '!env'
 	local added
 	added=$(comm -13 <(git -C "$PLUGIN_DIR/alpha" env | sort) <(tpp_git "$PLUGIN_DIR/alpha" env | sort))
-	[ -n "$added" ]
+	[ "$added" = "$expected" ] || {
+		printf 'tpp_git adds:\n%s\n' "$added"
+		return 1
+	}
 	# None of it stays in the caller's environment.
+	tpp_git "$PLUGIN_DIR/alpha" rev-parse --git-dir >/dev/null
 	[ "$LC_ALL" = C.UTF-8 ]
 	[ -z "${GIT_TERMINAL_PROMPT+set}" ]
-	# The fetch's environment, as its remote side gets it. The fetch runs in
-	# a process of its own, as in the panel, with the panel's credential
-	# setting in its environment, and prints the command of the recorded
-	# process: a forked process shows as bash until it has started its
-	# command; a shell waiting for the command does for good (the remote
-	# side keeps the fetch running for a second).
-	git -C "$PLUGIN_DIR/alpha" config remote.origin.uploadpack \
-		"env >$TEST_ROOT/fetch-env; sleep 1; git-upload-pack"
+	# What a fetch adds: the difference between the environments git gets
+	# for a plain git fetch and for tpp_fetch_start's, both run from a
+	# process of their own, as in the panel, with the panel's credential
+	# setting in its environment. A git first on PATH records the
+	# environment of each fetch, without SHLVL and _, which bash sets for
+	# itself, and the credential helper git applies with it to TPM's GitHub
+	# URLs, then becomes the real git. (The remote side of a local fetch
+	# would not do: git strips GIT_CONFIG_COUNT from its environment.) The
+	# process prints the command of the recorded process: a forked process
+	# shows as bash until it has become git or the timeout command; a shell
+	# waiting for the command does for good (the remote side keeps the
+	# fetch running for a second).
+	git config --global credential.helper store
+	git -C "$PLUGIN_DIR/alpha" config remote.origin.uploadpack "sleep 1; git-upload-pack"
+	cat >"$TEST_ROOT/bin/git" <<EOF
+#!/usr/bin/env bash
+if [[ \$3 == fetch ]]; then
+	env | grep -v -e '^SHLVL=' -e '^_=' >"$TEST_ROOT/fetch-env"
+	"$(type -P git)" config --get-urlmatch credential.helper https://git@github.com/someone/alpha >"$TEST_ROOT/fetch-helper"
+fi
+exec "$(type -P git)" "\$@"
+EOF
+	chmod +x "$TEST_ROOT/bin/git"
+	hash -r
 	cat >"$TEST_ROOT/fetch" <<EOF
 #!/usr/bin/env bash
 source "$TPP_ROOT/scripts/lib.sh"
 tpp_init
 tpp_disable_credential_helpers
+git -C "$PLUGIN_DIR/alpha" fetch --quiet
+mv "$TEST_ROOT/fetch-env" "$TEST_ROOT/plain-fetch-env"
+rm "$TEST_ROOT/fetch-helper"
 tpp_fetch_start
 for _ in 1 2 3 4 5 6 7 8 9 10; do
 	command=\$(ps -o comm= -p "\${TPP_FETCH_PIDS[0]}")
@@ -356,15 +381,18 @@ EOF
 		echo "fetches and the recorded process: $recorded"
 		return 1
 	}
-	local line
-	while IFS= read -r line; do
-		grep -qxF -- "$line" "$TEST_ROOT/fetch-env" || {
-			echo "the fetch's environment lacks $line"
-			return 1
-		}
-	done <<<"$added"
-	# The rest of the environment reaches the fetch too.
-	grep -qxF "GIT_CONFIG_KEY_0=credential.https://git@github.com.helper" "$TEST_ROOT/fetch-env"
+	# git applies the panel's credential setting to the fetch: no helper
+	# for TPM's GitHub URLs, where the global one would apply.
+	[ -f "$TEST_ROOT/fetch-helper" ]
+	[ -z "$(cat "$TEST_ROOT/fetch-helper")" ] || {
+		echo "the fetch's credential helper: $(cat "$TEST_ROOT/fetch-helper")"
+		return 1
+	}
+	added=$(comm -13 <(sort "$TEST_ROOT/plain-fetch-env") <(sort "$TEST_ROOT/fetch-env"))
+	[ "$added" = $'GIT_SSH_COMMAND=ssh -o BatchMode=yes\n'"$expected" ] || {
+		printf 'the fetch adds:\n%s\n' "$added"
+		return 1
+	}
 }
 
 @test "a fetch gets tpp_git's environment, and its recorded process is git or the timeout command" {
