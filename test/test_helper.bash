@@ -34,6 +34,11 @@ tpp_setup() {
 		unset "$name"
 	done < <(compgen -v GIT_CONFIG_KEY_; compgen -v GIT_CONFIG_VALUE_)
 	unset GIT_CONFIG_COUNT
+	# The same for the other ways the environment points git at config: a
+	# global file elsewhere than the test's HOME (which `git config
+	# --global` would write to), entries from `git -c`, and a system file
+	# (GIT_CONFIG_NOSYSTEM below leaves the system file out anyway).
+	unset GIT_CONFIG_GLOBAL GIT_CONFIG_PARAMETERS GIT_CONFIG_SYSTEM
 	# A fixed English locale, so the tests' English expectations hold on any
 	# machine: the panel speaks the language of LC_ALL, LC_MESSAGES or LANG,
 	# and git words its relative dates by them and by LANGUAGE (which C
