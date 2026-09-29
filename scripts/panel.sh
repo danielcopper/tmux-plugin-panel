@@ -3,6 +3,27 @@
 # The plugin panel. Without arguments it opens the fzf list; the other
 # subcommands are what the list's key bindings call.
 
+# preview_cache_file <name>: while the list shows the check's frames (see
+# run_check), sets PREVIEW_CACHE_FILE to the file in the check's directory
+# that holds the preview of plugin <name>, or will: one file while the
+# plugin's fetch runs, another once it has ended. False at any other time.
+preview_cache_file() {
+	[[ -n ${TPP_CHECK_DIR-} && -e $TPP_CHECK_DIR/checking ]] || return 1
+	case $1 in
+	"" | . | .. | */*) return 1 ;;
+	esac
+	PREVIEW_CACHE_FILE="$TPP_CHECK_DIR/preview/before/$1"
+	[[ -e $TPP_CHECK_DIR/fetched/$1 ]] && PREVIEW_CACHE_FILE="$TPP_CHECK_DIR/preview/after/$1"
+	return 0
+}
+
+# fzf runs the preview again for every frame of the check. A preview in the
+# check's cache is printed here, before the rest of the panel is read and
+# the library loaded, which would take several times as long.
+if [[ ${1-} == preview ]] && preview_cache_file "${2-}" && [[ -f $PREVIEW_CACHE_FILE ]]; then
+	exec cat "$PREVIEW_CACHE_FILE"
+fi
+
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$CURRENT_DIR/panel.sh"
 TPP_MIN_FZF=0.36
@@ -395,32 +416,18 @@ cmd_recheck() {
 }
 
 # cmd_preview <name>: the preview of plugin <name>. While the list shows the
-# check's frames, fzf runs the preview again for every frame, so it comes
-# from a cache in the check's directory: it is made once while the plugin's
-# fetch runs and once after the fetch has ended, and read from then on.
-# Read before tpp_init, which reading does not need.
+# check's frames, fzf runs the preview again for every frame, so the preview
+# goes into a cache in the check's directory (see preview_cache_file): it is
+# made once while the plugin's fetch runs and once after the fetch has
+# ended, and read from the cache at the top of this script from then on.
 cmd_preview() {
-	local name=${1-} dir=${TPP_CHECK_DIR-} file='' text
-	if [[ -n $dir && -e $dir/checking ]]; then
-		case $name in
-		"" | . | .. | */*) ;;
-		*)
-			file="$dir/preview/before/$name"
-			[[ -e $dir/fetched/$name ]] && file="$dir/preview/after/$name"
-			;;
-		esac
-	fi
-	if [[ -n $file && -f $file ]]; then
-		cat "$file"
-		return
-	fi
-	tpp_init || exit 1
-	if [[ -z $file ]]; then
+	local name=$1 text
+	if ! preview_cache_file "$name"; then
 		tpp_preview "$name"
 		return
 	fi
 	text=$(tpp_preview "$name")
-	mkdir -p "${file%/*}" && write_file "$file" "$text"
+	mkdir -p "${PREVIEW_CACHE_FILE%/*}" && write_file "$PREVIEW_CACHE_FILE" "$text"
 	printf '%s\n' "$text"
 }
 
@@ -485,10 +492,6 @@ main() {
 		run_ui
 		return
 	fi
-	if [[ $cmd == preview ]]; then
-		cmd_preview "$@"
-		return
-	fi
 	tpp_init || exit 1
 	case $cmd in
 	# The actions write to the terminal themselves: fzf before 0.53 gives an
@@ -508,6 +511,7 @@ main() {
 		[[ ${1-} == --fetch ]] && tpp_fetch_all
 		tpp_collect | tpp_format_rows
 		;;
+	preview) cmd_preview "$1" ;;
 	check) run_check "${1-}" ;;
 	recheck) cmd_recheck ;;
 	update) cmd_update "$@" ;;

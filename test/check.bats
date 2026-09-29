@@ -317,6 +317,35 @@ EOF
 	[ ! -e "$dir" ]
 }
 
+@test "closing the popup ends the check and its fetches, and removes the check's directory" {
+	plugin alpha
+	slow_remote alpha 30
+	# A fake fzf that, like fzf, ends when its terminal is gone: it waits for
+	# a key on the terminal (for 30 seconds at most).
+	cat >"$TEST_ROOT/bin/fzf" <<EOF
+#!/usr/bin/env bash
+[[ \$1 == --version ]] && { echo "0.73.0 (fake)"; exit 0; }
+echo \$\$ >>"$TEST_ROOT/pids"
+printf '%s' "\$TPP_CHECK_DIR" >"$TEST_ROOT/fzf-check-dir"
+cat >/dev/null
+read -rsn1 -t 30 _ </dev/tty
+EOF
+	chmod +x "$TEST_ROOT/bin/fzf"
+	tmux new-window -d -n panel "$PANEL"
+	wait_for 10 test -s "$TEST_ROOT/sleeps"
+	wait_for 10 test -s "$TEST_ROOT/fzf-check-dir"
+	local dir job
+	dir=$(cat "$TEST_ROOT/fzf-check-dir")
+	job=$(cat "$dir/pid")
+	echo "$job" >>"$TEST_ROOT/pids"
+	# Closing the window hangs up the panel's terminal, as closing the popup
+	# does.
+	tmux kill-window -t panel
+	wait_for 5 dead "$job"
+	wait_for 5 no_fetch_left
+	wait_for 5 test ! -e "$dir"
+}
+
 @test "an action ends a running check before it runs TPM, and leaves fzf an action that only drops the binding" {
 	plugin alpha
 	slow_remote alpha 30
