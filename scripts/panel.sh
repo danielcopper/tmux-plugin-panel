@@ -441,9 +441,9 @@ run_ui() {
 	if tpp_version_ge "$FZF_VERSION" "$TPP_CHECK_FZF" && TPP_CHECK_DIR=$(mktemp -d); then
 		check=1
 		export TPP_CHECK_DIR
+		# bash runs the exit trap also when SIGHUP or SIGTERM ends it, as
+		# when the popup is closed.
 		trap end_check EXIT
-		trap 'exit 129' HUP
-		trap 'exit 143' TERM
 		tpp_collect_checking >"$TPP_CHECK_DIR/records"
 		start_check "$TPP_CHECK_DIR"
 		# --id-nth keeps the marks (tab) across the frames' reloads.

@@ -348,6 +348,35 @@ EOF
 	wait_for 5 test ! -e "$dir"
 }
 
+@test "a check whose panel is killed stops its fetches when the terminal hangs up" {
+	plugin alpha
+	slow_remote alpha 30
+	# The same fake fzf as in the test above.
+	cat >"$TEST_ROOT/bin/fzf" <<EOF
+#!/usr/bin/env bash
+[[ \$1 == --version ]] && { echo "0.73.0 (fake)"; exit 0; }
+echo \$\$ >>"$TEST_ROOT/pids"
+printf '%s' "\$TPP_CHECK_DIR" >"$TEST_ROOT/fzf-check-dir"
+cat >/dev/null
+read -rsn1 -t 30 _ </dev/tty
+EOF
+	chmod +x "$TEST_ROOT/bin/fzf"
+	tmux new-window -d -n panel "$PANEL"
+	wait_for 10 test -s "$TEST_ROOT/sleeps"
+	wait_for 10 test -s "$TEST_ROOT/fzf-check-dir"
+	local dir job panel
+	dir=$(cat "$TEST_ROOT/fzf-check-dir")
+	job=$(cat "$dir/pid")
+	echo "$job" >>"$TEST_ROOT/pids"
+	panel=$(tmux display-message -p -t panel '#{pane_pid}')
+	[ -n "$panel" ]
+	# The panel gets no chance to end the check. It led the terminal's
+	# session, so the terminal hangs up the processes left on it.
+	kill -KILL "$panel"
+	wait_for 5 dead "$job"
+	wait_for 5 no_fetch_left
+}
+
 @test "an action ends a running check before it runs TPM, and leaves fzf an action that only drops the binding" {
 	plugin alpha
 	slow_remote alpha 30
