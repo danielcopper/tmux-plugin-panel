@@ -21,6 +21,7 @@ teardown() {
 	# ($TEST_ROOT/pids), the remotes' sleeps ($TEST_ROOT/sleeps, see
 	# slow_remote) and a check started by recheck.
 	local file pid
+	[[ -n ${ORIGINAL_PATH-} ]] && PATH=$ORIGINAL_PATH
 	for file in "$TEST_ROOT/pids" "$TEST_ROOT/sleeps" "$CHECK_DIR/pid"; do
 		[[ -f $file ]] || continue
 		while read -r pid; do
@@ -81,6 +82,11 @@ no_fetch_left() {
 	sleeps_dead && ! pgrep -f -- "$PLUGIN_DIR" >/dev/null && ! pgrep -f -- "$TEST_ROOT/remotes" >/dev/null
 }
 
+# fetch_left: true when a process of a fetch runs.
+fetch_left() {
+	! no_fetch_left
+}
+
 # row_of <name>: the row of plugin <name> in the current frame, as shown:
 # without its key and escape codes.
 row_of() {
@@ -132,6 +138,36 @@ sleeping() {
 # which loads the list's usual rows.
 final_action_written() {
 	[[ $(cat "$CHECK_DIR/action" 2>/dev/null) == *"reload-sync($SELF rows)"* ]]
+}
+
+# without_timeout: takes timeout and gtimeout off PATH, for the test and for
+# the commands its tmux server starts, so that the panel fetches without a
+# timeout command. A directory of links to every other command on PATH takes
+# PATH's place, after the test's own bin directory. The test itself keeps
+# timeout as a function, which the panel does not see; teardown puts PATH
+# back.
+without_timeout() {
+	local bin="$TEST_ROOT/no-timeout" dir i
+	local -a dirs=()
+	REAL_TIMEOUT=$(command -v timeout)
+	timeout() { "$REAL_TIMEOUT" "$@"; }
+	ORIGINAL_PATH=$PATH
+	mkdir -p "$bin"
+	IFS=: read -ra dirs <<<"$PATH"
+	# Linked from the last directory to the first, so that the first
+	# directory's command wins, as on PATH.
+	for ((i = ${#dirs[@]} - 1; i >= 0; i--)); do
+		dir=${dirs[i]}
+		[[ -d $dir && $dir != "$TEST_ROOT/bin" ]] || continue
+		find "$dir" -maxdepth 1 -mindepth 1 -exec ln -sfn -t "$bin" {} +
+	done
+	rm -f "$bin/timeout" "$bin/gtimeout"
+	PATH="$TEST_ROOT/bin:$bin"
+	hash -r
+	if type -P timeout >/dev/null || type -P gtimeout >/dev/null; then
+		return 1
+	fi
+	tmux set-environment -g PATH "$PATH"
 }
 
 # fake_fzf <version>: a fake fzf first on PATH that reports <version> and
@@ -274,7 +310,7 @@ j/k move · J/K scroll preview · ctrl-d/ctrl-u scroll preview by half a page" \
 	[[ $(row_of alpha) == *"wird geprüft "[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]* ]]
 }
 
-@test "SIGTERM ends the check and its fetches, without a final action" {
+case_sigterm() {
 	plugin alpha
 	plugin beta
 	slow_remote alpha 30
@@ -284,14 +320,23 @@ j/k move · J/K scroll preview · ctrl-d/ctrl-u scroll preview by half a page" \
 	echo "$job" >>"$TEST_ROOT/pids"
 	wait_for 10 sleeping 2
 	wait_for 10 test -s "$CHECK_DIR/frame"
-	run ! no_fetch_left
+	fetch_left
 	kill -TERM "$job"
 	wait_for 5 dead "$job"
 	wait_for 5 no_fetch_left
 	[ "$(cat "$CHECK_DIR/action")" = "reload-sync(cat $(printf '%q' "$CHECK_DIR")/frame)" ]
 }
 
-@test "quitting the list ends the check and its fetches, and removes the check's directory" {
+@test "SIGTERM ends the check and its fetches, without a final action" {
+	case_sigterm
+}
+
+@test "SIGTERM ends the check and its fetches, without a final action, also without timeout" {
+	without_timeout
+	case_sigterm
+}
+
+case_quit() {
 	plugin alpha
 	slow_remote alpha 30
 	# A fake fzf that quits as soon as the check's fetch runs, as q does.
@@ -307,8 +352,7 @@ cp "\$TPP_CHECK_DIR/pid" "$TEST_ROOT/job"
 printf '%s' "\$TPP_CHECK_DIR" >"$TEST_ROOT/fzf-check-dir"
 EOF
 	chmod +x "$TEST_ROOT/bin/fzf"
-	run timeout 20 "$PANEL"
-	[ "$status" -eq 0 ]
+	timeout 20 "$PANEL"
 	[ -s "$TEST_ROOT/sleeps" ]
 	local job dir
 	job=$(cat "$TEST_ROOT/job")
@@ -319,7 +363,16 @@ EOF
 	[ ! -e "$dir" ]
 }
 
-@test "closing the popup ends the check and its fetches, and removes the check's directory" {
+@test "quitting the list ends the check and its fetches, and removes the check's directory" {
+	case_quit
+}
+
+@test "quitting the list ends the check and its fetches, and removes the check's directory, also without timeout" {
+	without_timeout
+	case_quit
+}
+
+case_popup() {
 	plugin alpha
 	slow_remote alpha 30
 	# A fake fzf that, like fzf, ends when its terminal is gone: it waits for
@@ -348,7 +401,16 @@ EOF
 	wait_for 5 test ! -e "$dir"
 }
 
-@test "a check whose panel is killed stops its fetches when the terminal hangs up" {
+@test "closing the popup ends the check and its fetches, and removes the check's directory" {
+	case_popup
+}
+
+@test "closing the popup ends the check and its fetches, and removes the check's directory, also without timeout" {
+	without_timeout
+	case_popup
+}
+
+case_killed() {
 	plugin alpha
 	slow_remote alpha 30
 	# The same fake fzf as in the test above.
@@ -377,7 +439,16 @@ EOF
 	wait_for 5 no_fetch_left
 }
 
-@test "an action ends a running check before it runs TPM, and leaves fzf an action that only drops the binding" {
+@test "a check whose panel is killed stops its fetches when the terminal hangs up" {
+	case_killed
+}
+
+@test "a check whose panel is killed stops its fetches when the terminal hangs up, also without timeout" {
+	without_timeout
+	case_killed
+}
+
+case_action() {
 	plugin alpha
 	slow_remote alpha 30
 	# TPM's install, replaced by one that records whether a fetch still runs.
@@ -389,13 +460,11 @@ else
 	echo "no fetch"
 fi >"$TEST_ROOT/during-install"
 EOF
-	run with_check timeout 20 "$PANEL" recheck
-	[ "$status" -eq 0 ]
+	with_check timeout 20 "$PANEL" recheck
 	local job
 	job=$(cat "$CHECK_DIR/pid")
 	wait_for 10 test -s "$TEST_ROOT/sleeps"
-	run with_check on_terminal "$SELF install"
-	[ "$status" -eq 0 ]
+	with_check on_terminal "$SELF install" >/dev/null
 	[ "$(cat "$TEST_ROOT/during-install")" = "no fetch" ]
 	dead "$job"
 	no_fetch_left
@@ -404,10 +473,18 @@ EOF
 	[ ! -e "$CHECK_DIR/checking" ]
 }
 
-@test "recheck, bound to r, starts the check again from the start" {
+@test "an action ends a running check before it runs TPM, and leaves fzf an action that only drops the binding" {
+	case_action
+}
+
+@test "an action ends a running check before it runs TPM, and leaves fzf an action that only drops the binding, also without timeout" {
+	without_timeout
+	case_action
+}
+
+case_recheck() {
 	plugin alpha
-	run with_check timeout 20 "$PANEL" recheck
-	[ "$status" -eq 0 ]
+	with_check timeout 20 "$PANEL" recheck
 	local first
 	first=$(cat "$CHECK_DIR/pid")
 	wait_for 15 final_action_written
@@ -415,8 +492,7 @@ EOF
 	[ -e "$CHECK_DIR/fetched/alpha" ]
 	[ ! -e "$CHECK_DIR/checking" ]
 	slow_remote alpha 30
-	run with_check timeout 20 "$PANEL" recheck
-	[ "$status" -eq 0 ]
+	with_check timeout 20 "$PANEL" recheck
 	# At once: nothing for fzf to apply yet (the final action of the check
 	# before would drop the binding r has just bound again), the preview
 	# comes from the new check's cache, which is empty, and a new check runs.
@@ -433,10 +509,18 @@ EOF
 	wait_for 10 spinning alpha
 	# r while a check runs ends it and its fetch first.
 	wait_for 10 test -s "$TEST_ROOT/sleeps"
-	run with_check timeout 20 "$PANEL" recheck
-	[ "$status" -eq 0 ]
+	with_check timeout 20 "$PANEL" recheck
 	dead "$second"
 	wait_for 5 sleeps_dead
+}
+
+@test "recheck, bound to r, starts the check again from the start" {
+	case_recheck
+}
+
+@test "recheck, bound to r, starts the check again from the start, also without timeout" {
+	without_timeout
+	case_recheck
 }
 
 @test "while a check runs, the preview comes from the check's cache, made once before and once after the plugin's fetch" {

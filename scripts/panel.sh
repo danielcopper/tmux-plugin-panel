@@ -281,6 +281,17 @@ fetch_started() {
 	return 1
 }
 
+# end_fetches: sends SIGTERM to the process group of each of run_check's
+# fetches that still runs. Each fetch leads its group: git and what it
+# started (ssh, a remote helper) without a timeout command, which on SIGTERM
+# ends only itself; or the timeout command, which passes the signal on too.
+end_fetches() {
+	local pid
+	for pid in "${TPP_FETCH_PIDS[@]}"; do
+		kill -TERM -- "-$pid" 2>/dev/null
+	done
+}
+
 # check_records: the records of run_check's rows, from its arrays names,
 # statuses and rests.
 check_records() {
@@ -306,8 +317,12 @@ run_check() {
 	self=$(printf '%q' "$SELF")
 	qdir=$(printf '%q' "$dir")
 	mkdir -p "$dir/fetched" || return 1
-	trap 'kill -TERM "${TPP_FETCH_PIDS[@]}" 2>/dev/null; exit 1' TERM HUP
+	trap 'end_fetches; exit 1' TERM HUP
+	# Each fetch in a process group of its own (job control), so that
+	# end_fetches reaches everything the fetch started.
+	set -m
 	tpp_fetch_start
+	set +m
 	if [[ -f $dir/records ]]; then
 		records=$(<"$dir/records")
 	else
