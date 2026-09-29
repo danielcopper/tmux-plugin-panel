@@ -316,9 +316,10 @@ tpp_timeout_cmd() {
 	fi
 }
 
-# Starts a fetch of every installed plugin, all in parallel in the
-# background, and returns without waiting for them. Each fetch is bounded by
-# TPP_FETCH_TIMEOUT seconds when a timeout command is available. Sets the
+# Starts a fetch of every git checkout in the plugin directory, all in
+# parallel in the background, and returns without waiting for them. Each
+# fetch is bounded by TPP_FETCH_TIMEOUT seconds when a timeout command is
+# available. Sets the
 # arrays TPP_FETCH_PIDS and TPP_FETCH_NAMES: TPP_FETCH_PIDS[i] is the process
 # of the fetch of the plugin in directory TPP_FETCH_NAMES[i]. The process is
 # the timeout command, which on SIGTERM passes the signal on to the fetch
@@ -420,9 +421,10 @@ tpp_status_color() {
 
 # tpp_status_text <status>: the text the list shows for a status from
 # tpp_collect: the symbols (✓, ↑N, ↓M) as they are, the words in the panel's
-# language. The frames of the check (fzf 0.73 and newer, see panel.sh) show
-# a plugin whose fetch runs as "checking <frame>", <frame> being the
-# spinner's current frame.
+# language. In the check's frames (fzf 0.73 and newer, see panel.sh) the
+# status of a plugin whose fetch runs is "checking <mark>", shown as
+# tpp_msg_status_checking <mark>; run_check puts the spinner's current frame
+# in place of the mark.
 tpp_status_text() {
 	case $1 in
 	"checking…") printf '%s\n' "$TPP_MSG_STATUS_CHECKING" ;;

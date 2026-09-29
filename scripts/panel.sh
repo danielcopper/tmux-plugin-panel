@@ -17,9 +17,9 @@ preview_cache_file() {
 	return 0
 }
 
-# fzf runs the preview again for every frame of the check. A preview in the
-# check's cache is printed here, before the rest of the panel is read and
-# the library loaded, which would take several times as long.
+# A preview in the check's cache (see cmd_preview) is printed here, before
+# the rest of the panel is read and the library loaded, which a cached
+# preview does not need and which would cost more CPU than the rest of it.
 if [[ ${1-} == preview ]] && preview_cache_file "${2-}" && [[ -f $PREVIEW_CACHE_FILE ]]; then
 	exec cat "$PREVIEW_CACHE_FILE"
 fi
@@ -308,7 +308,7 @@ check_records() {
 # status of a plugin is made once, when its fetch ends. The action is a
 # reload of the frame while the fetches run. At the end, after a last frame
 # with every status, it drops the every(0.1) binding and loads the list's
-# usual rows. On SIGTERM or SIGHUP it stops its fetches and exits without
+# usual rows. On SIGTERM or SIGHUP it ends its fetches and exits without
 # changing the action.
 run_check() {
 	local dir=$1 self qdir records line status spec template name i k frame=0 changed=1
@@ -385,8 +385,9 @@ run_check() {
 }
 
 # start_check <dir>: starts the check in <dir> in the background, from its
-# start: what a check before left in <dir> is gone, and fzf finds nothing to
-# apply until the first frame.
+# start: the previous check's fetched marks and cached previews are removed
+# and the action emptied, so fzf finds nothing to apply until the first
+# frame.
 start_check() {
 	local dir=$1
 	rm -rf "$dir/fetched" "$dir/preview"
@@ -397,9 +398,10 @@ start_check() {
 }
 
 # stop_check <dir>: ends the check in <dir> if one runs, together with its
-# fetches (its SIGTERM trap stops them), and leaves fzf an action that only
+# fetches (its SIGTERM trap ends them), and leaves fzf an action that only
 # drops the every(0.1) binding. A check that has not ended after 3 seconds
-# is killed; its fetches then end at their timeout.
+# is killed; its fetches then run on until their timeout, or without
+# timeout or gtimeout until git gives up.
 stop_check() {
 	local dir=$1 pid='' tries=0
 	{ read -r pid <"$dir/pid"; } 2>/dev/null

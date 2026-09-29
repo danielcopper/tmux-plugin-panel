@@ -219,7 +219,7 @@ j/k move · J/K scroll preview · ctrl-d/ctrl-u scroll preview by half a page" \
 		--bind 'q:abort'
 }
 
-@test "below fzf 0.73 the panel runs fzf exactly as before, without a check" {
+@test "below fzf 0.73 the panel loads the status through fzf's load event, without a check" {
 	local version
 	for version in 0.36.0 0.72.1; do
 		fake_fzf "$version"
@@ -291,7 +291,7 @@ j/k move · J/K scroll preview · ctrl-d/ctrl-u scroll preview by half a page" \
 	[ "$output" = $'action\nfetched\nframe' ]
 }
 
-@test "a declared plugin that is no git checkout shows its status in the check's first frame" {
+@test "a declared plugin that is not a git checkout shows its status in the check's first frame" {
 	mkdir -p "$PLUGIN_DIR/plain"
 	declare_plugin someone/plain
 	plugin alpha
@@ -441,11 +441,11 @@ EOF
 	wait_for 5 no_fetch_left
 }
 
-@test "a check whose panel is killed stops its fetches when the terminal hangs up" {
+@test "a check whose panel is killed ends its fetches when the terminal hangs up" {
 	case_killed
 }
 
-@test "a check whose panel is killed stops its fetches when the terminal hangs up, also without timeout" {
+@test "a check whose panel is killed ends its fetches when the terminal hangs up, also without timeout" {
 	without_timeout
 	case_killed
 }
