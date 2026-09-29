@@ -462,7 +462,9 @@ run_ui() {
 		tpp_collect_checking >"$TPP_CHECK_DIR/records"
 		start_check "$TPP_CHECK_DIR"
 		# --id-nth keeps the marks (tab) across the frames' reloads.
-		load=(--id-nth 1 --bind "every(0.1):transform(cat $(printf '%q' "$TPP_CHECK_DIR")/action)")
+		# --no-track overrides a --track in FZF_DEFAULT_OPTS, which with
+		# --id-nth would block the input on every reload of a frame.
+		load=(--id-nth 1 --no-track --bind "every(0.1):transform(cat $(printf '%q' "$TPP_CHECK_DIR")/action)")
 		refresh="r:execute-silent($self recheck)+rebind(every(0.1))"
 	else
 		load=(--bind "load:reload-sync($self rows --fetch)+unbind(load)")

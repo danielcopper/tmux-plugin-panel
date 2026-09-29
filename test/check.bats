@@ -240,8 +240,10 @@ j/k move · J/K scroll preview · ctrl-d/ctrl-u scroll preview by half a page" \
 		[ "$status" -eq 0 ]
 		dir=$(cat "$TEST_ROOT/fzf-check-dir")
 		[ -n "$dir" ]
+		# --no-track overrides a --track in FZF_DEFAULT_OPTS: with --id-nth
+		# it would block the input on every reload of a frame.
 		cmp "$TEST_ROOT/fzf-argv" <(expected_argv \
-			--id-nth 1 --bind "every(0.1):transform(cat $(printf '%q' "$dir")/action)" \
+			--id-nth 1 --no-track --bind "every(0.1):transform(cat $(printf '%q' "$dir")/action)" \
 			-- "r:execute-silent($SELF recheck)+rebind(every(0.1))")
 		# The check's directory is gone once the panel is.
 		[ ! -e "$dir" ]
