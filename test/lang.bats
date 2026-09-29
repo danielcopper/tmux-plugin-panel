@@ -154,7 +154,7 @@ enter/u aktualisieren · U alle · a hinzufügen · d entfernen
 i installieren · c aufräumen · r neu laden · tab markieren · q beenden
 j/k bewegen · J/K Vorschau scrollen · ctrl-d/ctrl-u Vorschau um eine halbe Seite scrollen" ]
 	run cat "$TEST_ROOT/fzf-input"
-	[[ ${lines[0]} == $'\t'"${DIM}Plugin "*"Status "*"installierter Commit${RESET}" ]]
+	[[ ${lines[0]} == $'\t'"${DIM}Plugin "*"Status "*"Installierter Commit${RESET}" ]]
 	[[ ${lines[1]} == alpha$'\t'*"wird geprüft…"* ]]
 	[[ ${lines[2]} == missing$'\t'*"nicht installiert"* ]]
 }

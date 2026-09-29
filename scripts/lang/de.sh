@@ -17,11 +17,11 @@ TPP_MSG_HINT_SCROLL='Vorschau scrollen'
 TPP_MSG_HINT_SCROLL_HALF='Vorschau um eine halbe Seite scrollen'
 TPP_MSG_HINT_LINES='4 5 3'
 tpp_msg_header() { printf 'Plugins %s   Datei %s' "$1" "$2"; }
-tpp_msg_not_sourced() { printf '%s wird nicht aus %s eingebunden' "$1" "$2"; }
+tpp_msg_not_sourced() { printf '%s wird in %s nicht eingebunden' "$1" "$2"; }
 
 TPP_MSG_COLUMN_PLUGIN='Plugin'
 TPP_MSG_COLUMN_STATUS='Status'
-TPP_MSG_COLUMN_AGE='installierter Commit'
+TPP_MSG_COLUMN_AGE='Installierter Commit'
 TPP_MSG_STATUS_CHECKING='wird geprüft…'
 TPP_MSG_STATUS_NOT_INSTALLED='nicht installiert'
 TPP_MSG_STATUS_NOT_DECLARED='nicht eingetragen'
@@ -47,7 +47,7 @@ TPP_MSG_CONFIRM_CHOICES='[j/N]'
 TPP_MSG_CONFIRM_YES='j ja y yes'
 TPP_MSG_INTERRUPTED='Abgebrochen.'
 TPP_MSG_UP_TO_DATE='bereits aktuell'
-TPP_MSG_UPDATE_FAILED='Update fehlgeschlagen'
+TPP_MSG_UPDATE_FAILED='Aktualisierung fehlgeschlagen'
 TPP_MSG_INSTALLING_MISSING='Fehlende Plugins werden installiert'
 TPP_MSG_NOTHING_TO_CLEAN='Nichts aufzuräumen. Beliebige Taste drücken, um zur Liste zurückzukehren.'
 TPP_MSG_CLEAN_LIST='Verzeichnisse ohne Eintrag:'
@@ -67,11 +67,11 @@ tpp_msg_updating() {
 }
 tpp_msg_installing() { printf '%s wird installiert' "$1"; }
 tpp_msg_add_title() { printf 'Plugin zu %s hinzufügen' "$1"; }
-tpp_msg_note_not_sourced() { printf 'Hinweis: %s wird nicht aus %s eingebunden, daher sieht TPM die Plugins darin nicht.' "$1" "$2"; }
+tpp_msg_note_not_sourced() { printf 'Hinweis: %s wird in %s nicht eingebunden, daher sieht TPM die Plugins darin nicht.' "$1" "$2"; }
 tpp_msg_add_source_line() { printf "Diese Zeile vor \"run '…/tpm/tpm'\" einfügen:  source-file %s" "$1"; }
 tpp_msg_remove_elsewhere() { printf '%s ist in %s eingetragen, bitte die Zeile dort entfernen.' "$1" "$2"; }
 tpp_msg_remove_list() { printf 'Entfernen: %s' "$1"; }
-tpp_msg_remove_confirm() { printf 'Die Zeilen in %s und die Verzeichnisse löschen?' "$1"; }
+tpp_msg_remove_confirm() { printf 'Die zugehörigen Zeilen in %s und die Verzeichnisse löschen?' "$1"; }
 
 TPP_MSG_CANNOT_START='Start nicht möglich'
 TPP_MSG_UNKNOWN_VERSION='unbekannt'
@@ -87,15 +87,15 @@ tpp_msg_missing_commands() {
 		printf 'benötigte Befehle fehlen: %s' "$*"
 	fi
 }
-tpp_msg_tpm_not_found() { printf 'TPM nicht gefunden in %s' "$1"; }
+tpp_msg_tpm_not_found() { printf 'TPM in %s nicht gefunden' "$1"; }
 tpp_msg_reload_failed() { printf 'Neuladen von %s fehlgeschlagen' "$1"; }
 tpp_msg_unknown_command() { printf 'unbekannter Befehl: %s' "$1"; }
 tpp_msg_invalid_characters() { printf "ungültiges Plugin '%s': Leerzeichen, Anführungszeichen und Semikolons sind nicht erlaubt" "$1"; }
 tpp_msg_invalid_branch() { printf "ungültiger Branch in '%s'" "$1"; }
-tpp_msg_invalid_github_url() { printf "ungültige GitHub-URL '%s': erwartet github.com/owner/repo" "$1"; }
-tpp_msg_invalid_plugin() { printf "ungültiges Plugin '%s': erwartet owner/repo oder eine Git-URL" "$1"; }
+tpp_msg_invalid_github_url() { printf "ungültige GitHub-URL '%s' (erwartet: github.com/owner/repo)" "$1"; }
+tpp_msg_invalid_plugin() { printf "ungültiges Plugin '%s' (erwartet: owner/repo oder eine Git-URL)" "$1"; }
 tpp_msg_no_repository_name() { printf "ungültiges Plugin '%s': kein Repository-Name" "$1"; }
-tpp_msg_panel_file_is_config() { printf '@tmux-plugin-panel-file zeigt auf %s; das Panel bearbeitet nie die tmux-Konfiguration' "$1"; }
+tpp_msg_panel_file_is_config() { printf '@tmux-plugin-panel-file zeigt auf %s; das Panel bearbeitet die tmux-Konfiguration nie' "$1"; }
 tpp_msg_already_declared() { printf "'%s' ist bereits als '%s' in %s eingetragen" "$1" "$2" "$3"; }
 tpp_msg_invalid_name() { printf "ungültiger Plugin-Name '%s'" "$1"; }
 tpp_msg_declared_elsewhere() { printf "'%s' ist in %s eingetragen, bitte die Zeile dort entfernen" "$1" "$2"; }
