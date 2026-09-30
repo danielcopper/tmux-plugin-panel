@@ -28,6 +28,7 @@ TPP_MSG_STATUS_NOT_DECLARED='nicht eingetragen'
 TPP_MSG_STATUS_PINNED='gepinnt'
 TPP_MSG_STATUS_NO_UPSTREAM='kein Upstream'
 TPP_MSG_STATUS_NOT_GIT='kein Git-Repo'
+tpp_msg_status_checking() { printf 'wird geprüft %s' "$1"; }
 
 TPP_MSG_PREVIEW_DECLARED='eingetragen'
 TPP_MSG_PREVIEW_IN='in'

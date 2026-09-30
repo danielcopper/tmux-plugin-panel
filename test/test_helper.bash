@@ -27,6 +27,18 @@ tpp_setup() {
 	TEST_SOCKET="tpp-test-$$-$RANDOM"
 
 	unset TMUX TMUX_PANE TMUX_PLUGIN_MANAGER_PATH GIT_SSH GIT_SSH_COMMAND
+	# git configuration entries from the environment, which would reach the
+	# code under test and move the panel's own entry off index 0.
+	local name
+	while IFS= read -r name; do
+		unset "$name"
+	done < <(compgen -v GIT_CONFIG_KEY_; compgen -v GIT_CONFIG_VALUE_)
+	unset GIT_CONFIG_COUNT
+	# The same for the other ways the environment points git at config: a
+	# global file elsewhere than the test's HOME (which `git config
+	# --global` would write to), entries from `git -c`, and a system file
+	# (GIT_CONFIG_NOSYSTEM below leaves the system file out anyway).
+	unset GIT_CONFIG_GLOBAL GIT_CONFIG_PARAMETERS GIT_CONFIG_SYSTEM
 	# A fixed English locale, so the tests' English expectations hold on any
 	# machine: the panel speaks the language of LC_ALL, LC_MESSAGES or LANG,
 	# and git words its relative dates by them and by LANGUAGE (which C

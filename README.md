@@ -14,7 +14,8 @@ its own instead of editing your `tmux.conf`, and removes single plugins itself.
 - tmux 3.2 or newer (for `display-popup`)
 - TPM
 - bash, git
-- [fzf](https://github.com/junegunn/fzf) 0.36 or newer
+- [fzf](https://github.com/junegunn/fzf) 0.36 or newer; 0.73 or newer shows each
+  plugin's check as it happens (see Usage)
 - optional: `timeout` (GNU coreutils; `gtimeout` on macOS) to bound each
   plugin's fetch
 
@@ -47,12 +48,16 @@ sourced, the panel says so in its header.
 
 Press `prefix + P` to open the panel.
 
-When it opens, the panel fetches every installed plugin in parallel and shows
-`checking…` until the fetches are done; then the list shows the real status.
-While it fetches, on opening and after `r`, fzf's spinner turns in the line
-above the header.
+When it opens, and again after `r`, the panel fetches every installed plugin
+in parallel. With fzf 0.73 or newer, a plugin's status shows `checking ⠋`, with
+the spinner turning, while its fetch runs, and its real status as soon as its
+own fetch has ended. With older fzf the list shows `checking…` until all the
+fetches are done, and fzf's spinner turns in the line above the header
+meanwhile.
 Each fetch is cut off after 10 seconds when `timeout` or `gtimeout` is
-available.
+available. An action started while the fetches run (with fzf 0.73 or newer)
+stops them first; the plugins whose fetch it stopped show the status of their
+last fetch, and `r` fetches again.
 
 | Key                 | Action                                                                                                  |
 | ------------------- | ------------------------------------------------------------------------------------------------------- |
